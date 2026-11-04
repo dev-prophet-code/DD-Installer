@@ -44,6 +44,20 @@ The *target* must be x86-64 Linux with AVX2, >= 20 GB RAM (30-40 GB+ with more m
 * **Sietch names:** 1-32 letters, digits, space, `_`, `-` (conservative; upstream/Funcom may reject others).
 * **Never install as root.** The installer refuses it.
 
+## Download
+
+Ready-made programs are built automatically by GitHub Actions on every push to `main`:
+
+**[Releases](../../releases)** - `latest` is the rolling build of `main`; tagged versions (`v0.x.y`) are regular releases.
+
+| OS | File |
+|---|---|
+| Windows (x64) | `dd-installer-windows-amd64.zip` |
+| macOS (Apple Silicon / Intel) | `dd-installer-macos-arm64.tar.gz` / `...-amd64.tar.gz` |
+| Linux (x64 / arm64) | `dd-installer-linux-amd64.tar.gz` / `...-arm64.tar.gz` |
+
+Verify with `SHA256SUMS`. The binaries are **not code-signed** yet: Windows SmartScreen and macOS Gatekeeper will warn (see the platform folders). To publish a version: `git tag v0.1.0 && git push origin v0.1.0`.
+
 ## Build & run
 
 Requires Go 1.24+. No CGO, so cross-compiling needs no extra toolchains.

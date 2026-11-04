@@ -1,0 +1,47 @@
+name: Release
+# Every push to main builds all programs and refreshes the rolling "latest"
+# pre-release. Pushing a tag like v0.2.0 creates a normal versioned release.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+      - run: sudo apt-get install -y zip
+      - run: go vet ./... && go test ./...
+      - name: Build all platforms
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then V="${GITHUB_REF_NAME#v}"; else V="0.0.0-main.$(git rev-parse --short HEAD)"; fi
+          VERSION="$V" ./scripts/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dd-installer
+          path: dist/
+      - name: Publish release (tag)
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes
+      - name: Publish rolling "latest" (main)
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --cleanup-tag --yes || true
+          gh release create latest dist/* --target "$GITHUB_SHA" --prerelease \
+            --title "Latest build (main)" \
+            --notes "Automatic build of the current main branch ($GITHUB_SHA). Draft quality - see the disclaimer in the archive. Verify downloads with SHA256SUMS."

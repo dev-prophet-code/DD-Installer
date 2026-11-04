@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dune Docker Installer</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>Dune Docker Installer</h1>
+  <span id="ver" class="muted"></span>
+  <span class="muted right">Unofficial community tool - not affiliated with Funcom or Red-Blink</span>
+</header>
+<div class="banner" role="note"><b>Important:</b> This is an unofficial community tool. It does <b>not store</b> your credentials (SSH password/key passphrase, Funcom token) - they live in memory for this session only. Neither <b>RedBlink</b> (author of Dune: Awakening Docker) nor <b>Prophet</b> (author of this installer) accepts liability for damage or data loss. <a href="disclaimer.html" target="_blank" rel="noopener">Read the full disclaimer</a>.</div>
+<nav id="steps"></nav>
+<main>
+  <section data-step="0" class="panel">
+    <h2>1. Where should Dune Docker be installed?</h2>
+    <label class="card"><input type="radio" name="target" value="local"> <b>This computer</b>
+      <span id="local-info" class="muted"></span></label>
+    <label class="card"><input type="radio" name="target" value="ssh" checked> <b>A remote Linux server (SSH)</b>
+      <span class="muted">Recommended: Ubuntu server, regular user with sudo</span></label>
+    <div id="ssh-box" class="grid">
+      <label>Host / IP<input id="ssh-host" autocomplete="off"></label>
+      <label>Port<input id="ssh-port" type="number" value="22"></label>
+      <label>User<input id="ssh-user" autocomplete="off"></label>
+      <label>Authentication<select id="ssh-auth"><option value="key">Private key</option><option value="password">Password</option><option value="agent">ssh-agent</option></select></label>
+      <label id="row-key">Key file<input id="ssh-key" list="keys" placeholder="~/.ssh/id_ed25519"><datalist id="keys"></datalist></label>
+      <label id="row-pass">Key passphrase<input id="ssh-passphrase" type="password" autocomplete="off"></label>
+      <label id="row-pw" hidden>Password (also used for sudo)<input id="ssh-password" type="password" autocomplete="off"></label>
+    </div>
+    <div id="wsl-box" hidden class="grid"><label>WSL2 distribution<select id="wsl-distro"></select></label></div>
+    <label>Install folder <span class="muted">(blank = ~/dune-awakening-selfhost-docker)</span><input id="installdir" placeholder="/mnt/games/dune"></label>
+  </section>
+
+  <section data-step="1" class="panel" hidden>
+    <h2>2. Server</h2>
+    <div class="grid">
+      <label>Server title<input id="title" value="My Dune Server" maxlength="64"></label>
+      <label>Region<select id="region"></select></label>
+      <label>Web UI port<input id="webport" type="number" value="8088"></label>
+    </div>
+    <label>Funcom self-host token <span class="muted">(kept in memory, sent only to your server)</span>
+      <input id="token" type="password" autocomplete="off"></label>
+  </section>
+
+  <section data-step="2" class="panel" hidden>
+    <h2>3. Sietches &amp; Deep Desert</h2>
+    <h3>Hagga Basin Sietches</h3>
+    <div id="sietches"></div>
+    <button id="add-sietch" type="button">+ Add Sietch</button>
+    <label class="check"><input type="checkbox" id="combat"> Also apply PvP/PvE per Sietch <span class="muted">(experimental - verify in game)</span></label>
+    <h3>Deep Desert</h3>
+    <label>Instances<select id="dd">
+      <option value="0">Upstream default</option><option value="1">1</option><option value="2">2 (one PvE + one PvP)</option><option value="3">3</option></select></label>
+    <label id="row-third" hidden>Third instance ruleset<select id="dd3"><option>PVE</option><option>PVP</option></select></label>
+    <p id="dd-note" class="muted">Upstream keeps the first instance's existing ruleset, gives the second the opposite, and lets you choose only the third.</p>
+    <p id="ram-est" class="note"></p>
+  </section>
+
+  <section data-step="3" class="panel" hidden>
+    <h2>4. Scan &amp; optimise</h2>
+    <button id="scan" type="button" class="primary">Scan target</button>
+    <div id="hostkey" hidden class="warn"></div>
+    <div id="scan-out"></div>
+    <label class="check"><input type="checkbox" id="tuning" checked> Apply recommended tuning (PostgreSQL, RabbitMQ, swap)</label>
+    <pre id="wslcfg" hidden></pre>
+  </section>
+
+  <section data-step="4" class="panel" hidden>
+    <h2>5. Install</h2>
+    <div id="summary"></div>
+    <label class="check"><input type="checkbox" id="accept"> I have read and accept the <a href="disclaimer.html" target="_blank" rel="noopener">disclaimer</a>: use at my own risk, no credentials are stored by this tool, and neither RedBlink nor Prophet can be held liable.</label>
+    <button id="install" type="button" class="primary" disabled>Install now</button>
+    <button id="cancel" type="button" hidden>Cancel</button>
+    <ol id="progress"></ol>
+    <div id="assistant"></div>
+    <pre id="log" aria-live="polite"></pre>
+  </section>
+</main>
+<footer>
+  <button id="back" type="button">Back</button>
+  <button id="next" type="button" class="primary">Next</button>
+  <div id="errors" role="alert"></div>
+</footer>
+<script src="app.js"></script>
+</body>
+</html>

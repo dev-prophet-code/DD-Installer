@@ -17,6 +17,7 @@ package assistant
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/dev-prophet-code/dd-installer/internal/probe"
@@ -63,6 +64,9 @@ type Rule struct {
 	Risk    Risk
 	Actions func(Context) []Action
 	DocURL  string
+	// MaxUses caps how often the fix may run per install (default 1);
+	// transient problems (locks, outages, rate limits) allow several.
+	MaxUses int
 }
 
 // Context is what a rule sees.
@@ -86,6 +90,7 @@ type Diagnosis struct {
 	Risk    Risk     `json:"risk"`
 	Actions []Action `json:"actions"`
 	DocURL  string   `json:"docUrl,omitempty"`
+	MaxUses int      `json:"-"`
 }
 
 // Diagnose returns all matching rules, most specific (first declared) first.
@@ -93,7 +98,7 @@ func Diagnose(c Context) []Diagnosis {
 	hay := c.Output + "\n" + c.Err
 	var out []Diagnosis
 	for _, r := range Rules() {
-		if len(r.Steps) > 0 && !contains(r.Steps, c.Step) {
+		if len(r.Steps) > 0 && !slices.Contains(r.Steps, c.Step) {
 			continue
 		}
 		if r.Pattern != nil && !r.Pattern.MatchString(hay) {
@@ -102,22 +107,13 @@ func Diagnose(c Context) []Diagnosis {
 		if r.When != nil && !r.When(c) {
 			continue
 		}
-		d := Diagnosis{RuleID: r.ID, Title: r.Title, Explain: r.Explain, Risk: r.Risk, DocURL: r.DocURL}
+		d := Diagnosis{RuleID: r.ID, Title: r.Title, Explain: r.Explain, Risk: r.Risk, DocURL: r.DocURL, MaxUses: max(r.MaxUses, 1)}
 		if r.Actions != nil {
 			d.Actions = r.Actions(c)
 		}
 		out = append(out, d)
 	}
 	return out
-}
-
-func contains(l []string, s string) bool {
-	for _, x := range l {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }
 
 // Tail returns the last n lines of s.

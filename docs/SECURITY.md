@@ -9,3 +9,22 @@
 * **Supply chain:** the installer runs upstream `bootstrap.sh` from GitHub (HTTPS). Pinning/verification is on the roadmap; review upstream before use.
 
 Report vulnerabilities privately via GitHub security advisories.
+
+## Review & penetration-test log (v0.1 draft)
+
+Self-conducted review and active tests; fixed before release of the draft:
+
+| Finding | Fix |
+|---|---|
+| Child processes (apt/sudo/docker) could swallow the rest of a script via shared stdin | All runners use `sh -c 'eval "$(cat)"'` (script fully read first); regression test |
+| Shell injection via token / names / title / env values | JSON in quoted random-delimiter heredocs, strict whitelists, `sh` execution test with hostile values |
+| GUI could lose `done`/`error` events under heavy log output | Index-based event stream; structural events never dropped |
+| Assistant aborted on the first manual rule, ignoring fixable matches; "wait 5 min" rules ran only once | Manual rules no longer short-circuit; transient rules allow up to 3 uses |
+| `$HOME` in the admin-password path was not expanded by the helper | `os.path.expandvars` |
+| Re-running on an installed host was blocked by "port busy" | Downgraded to a warning |
+| Over-broad `tls` pattern could misfire | Tightened |
+| Runner leaked after SSH reconnect | `install.Run` owns and closes the runner |
+
+Active GUI checks (token, Host/DNS-rebinding, Origin/CSRF, content-type, body limit, unknown fields, CSP/headers, traversal, disclaimer gate) are covered by `internal/gui/server_test.go`.
+
+Known limitations: SSH keyboard-interactive auth is not supported; Windows `wsl.exe --exec` quoting is untested on real hardware; the upstream installer is fetched from `main` (not pinned).

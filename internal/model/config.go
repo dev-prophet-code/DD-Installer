@@ -5,6 +5,7 @@ package model
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -155,7 +156,7 @@ func (c *Config) Validate() []string {
 	if t := strings.TrimSpace(c.ServerTitle); t == "" || len(t) > 64 || strings.ContainsAny(t, "\"\\`$\n\r") {
 		add("serverTitle must be 1-64 characters without quotes, backslashes, $ or backticks")
 	}
-	if !contains(Regions, c.Region) {
+	if !slices.Contains(Regions, c.Region) {
 		add("region must be one of %s", strings.Join(Regions, ", "))
 	}
 
@@ -189,15 +190,6 @@ func (c *Config) Validate() []string {
 		}
 	}
 	return errs
-}
-
-func contains(list []string, v string) bool {
-	for _, x := range list {
-		if x == v {
-			return true
-		}
-	}
-	return false
 }
 
 // DeepDesertRoles describes the role each instance receives. The first role

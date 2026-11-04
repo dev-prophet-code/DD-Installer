@@ -174,7 +174,7 @@ func (s *SSH) Run(ctx context.Context, script string, out io.Writer) (int, error
 	sess.Stderr = out
 
 	done := make(chan error, 1)
-	go func() { done <- sess.Run("sh -s") }()
+	go func() { done <- sess.Run(ShellCommand) }()
 	select {
 	case <-ctx.Done():
 		sess.Close()

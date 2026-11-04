@@ -9,14 +9,14 @@ import (
 )
 
 // Local runs scripts through a configurable shell command. On Linux this is
-// plain `sh -s`; platforms/windows wraps it with `wsl.exe -d <distro> -- sh -s`.
+// plain `sh -s`; platforms/windows wraps it with `wsl.exe -d <distro> --exec sh -c ...`.
 type Local struct {
 	Label string
 	Cmd   []string // e.g. {"sh","-s"} or {"wsl.exe","-d","Ubuntu","--","sh","-s"}
 }
 
 // NewLocal returns a runner for the local Linux shell.
-func NewLocal() *Local { return &Local{Label: "local", Cmd: []string{"sh", "-s"}} }
+func NewLocal() *Local { return &Local{Label: "local", Cmd: ShellArgs} }
 
 func (l *Local) Describe() string { return l.Label }
 func (l *Local) Close() error     { return nil }

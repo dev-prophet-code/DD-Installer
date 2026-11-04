@@ -8,6 +8,15 @@ import (
 	"io"
 )
 
+// ShellArgs is how every runner starts the target shell. The script arrives
+// on stdin; `eval "$(cat)"` reads ALL of it first so that child processes
+// (apt, sudo, docker, ...) cannot swallow the unread rest of the script from
+// a shared stdin, and they see EOF instead.
+var ShellArgs = []string{"sh", "-c", `eval "$(cat)"`}
+
+// ShellCommand is ShellArgs as one command line for SSH.
+const ShellCommand = `sh -c 'eval "$(cat)"'`
+
 // Runner executes POSIX shell snippets on the target.
 type Runner interface {
 	// Run executes script via `sh -s` on the target, feeding it on stdin.

@@ -77,7 +77,7 @@ func (win) LocalRunner(cfg model.Config) (transport.Runner, error) {
 	if strings.HasPrefix(strings.ToLower(d), "docker-desktop") {
 		return nil, errors.New("docker-desktop is Docker Desktop's internal distribution; choose an Ubuntu distribution")
 	}
-	return &transport.Local{Label: "WSL2 (" + d + ")", Cmd: []string{"wsl.exe", "-d", d, "--", "sh", "-s"}}, nil
+	return &transport.Local{Label: "WSL2 (" + d + ")", Cmd: append([]string{"wsl.exe", "-d", d, "--exec"}, transport.ShellArgs...)}, nil
 }
 
 func (win) OpenBrowser(url string) error {

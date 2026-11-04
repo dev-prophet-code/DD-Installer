@@ -123,7 +123,7 @@ func Analyse(h probe.Info, cfg model.Config) Report {
 		case cfg.WebPort:
 			add(Warn, "port-web", "Port %d is already in use; the installer will pick the next free port.", p)
 		case 31982, 31983, 15432:
-			add(Error, "port-busy", "Port %d is already in use by another service.", p)
+			add(Warn, "port-busy", "Port %d is already in use (expected if Dune Docker is already installed here; otherwise another service blocks it).", p)
 		}
 	}
 	for _, t := range []string{"curl", "tar"} {
@@ -156,7 +156,7 @@ func Analyse(h probe.Info, cfg model.Config) Report {
 
 	if h.WSL || cfg.Target == model.TargetLocal && h.Kernel != "" && containsFold(h.Kernel, "microsoft") {
 		// WSL2 caps memory at 50% of host RAM by default; surface a .wslconfig.
-		r.WSLConfig = fmt.Sprintf("[wsl2]\nmemory=%dGB\nswap=8GB\n", maxInt(r.RequiredRAMGiB, 20))
+		r.WSLConfig = fmt.Sprintf("[wsl2]\nmemory=%dGB\nswap=8GB\n", max(r.RequiredRAMGiB, 20))
 		add(Info, "wslconfig", "WSL2 limits memory by default. Add the suggested .wslconfig on Windows (see docs) and run `wsl --shutdown`.")
 	}
 
@@ -182,11 +182,4 @@ func pgShm(totalGiB float64) string {
 
 func containsFold(s, sub string) bool {
 	return strings.Contains(strings.ToLower(s), strings.ToLower(sub))
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }

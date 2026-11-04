@@ -19,11 +19,17 @@ import (
 type fakePF struct {
 	ls   platform.LocalSupport
 	id   string
+	name string
 	prov int
 }
 
-func (f *fakePF) ID() string                          { return f.id }
-func (f *fakePF) DisplayName() string                 { return "Fake" }
+func (f *fakePF) ID() string { return f.id }
+func (f *fakePF) DisplayName() string {
+	if f.name != "" {
+		return f.name
+	}
+	return "Fake"
+}
 func (f *fakePF) LocalSupport() platform.LocalSupport { return f.ls }
 func (f *fakePF) LocalRunner(model.Config) (transport.Runner, error) {
 	return transport.NewLocal(), nil

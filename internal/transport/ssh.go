@@ -18,7 +18,7 @@ import (
 )
 
 // HostKeyError is returned when the server key has not been confirmed yet.
-// The GUI shows Fingerprint to the user; once accepted it is stored in
+// The UI shows Fingerprint to the user; once accepted it is stored in
 // SSHConfig.HostKeyFingerprint and the connection is retried.
 type HostKeyError struct {
 	Fingerprint string

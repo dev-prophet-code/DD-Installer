@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"fyne.io/fyne/v2"
 	fyneapp "fyne.io/fyne/v2/app"
@@ -783,5 +782,3 @@ func relevant(step int, e string) bool {
 	}
 	return false
 }
-
-var _ = time.Second

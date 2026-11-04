@@ -8,7 +8,7 @@ When an install step fails, `internal/assistant` matches the redacted tail of th
 | `moderate` | Explained; runs only after you click **Apply fix** (group/sudoers/system changes) |
 | `manual` | Instructions only |
 
-The assistant **never** runs destructive actions (no `rm -rf`, volume/prune, disk changes - enforced by a unit test). Each rule is applied at most once per run; a step is retried at most 3 times. Unknown errors yield a pointer to the troubleshooting docs and `dune doctor`.
+The assistant **never** runs destructive actions (no `rm -rf`, volume/prune, disk changes - enforced by a unit test). A fix rule is applied once per run (transient problems such as package locks, outages and rate limits up to 3 times); a step is retried at most 3 times. Unknown errors yield a pointer to the troubleshooting docs and `dune doctor`.
 
 ## Rule base
 

@@ -6,6 +6,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -277,7 +278,7 @@ func (c *Controller) Start(r Request) error {
 func (c *Controller) askConfirm(ctx context.Context, id string, d assistant.Diagnosis) bool {
 	c.mu.Lock()
 	c.seq++
-	key := id + "#" + string(rune('0'+c.seq%10)) + time.Now().Format("150405.000")
+	key := fmt.Sprintf("%s#%d", id, c.seq)
 	ch := make(chan bool, 1)
 	c.confirm[key] = ch
 	c.mu.Unlock()

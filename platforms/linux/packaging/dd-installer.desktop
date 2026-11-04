@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Dune Docker Installer
+Comment=Install and set up a Dune: Awakening Docker server (unofficial)
+Exec=@EXEC@
+Icon=dd-installer
+Terminal=false
+Categories=Utility;System;Game;

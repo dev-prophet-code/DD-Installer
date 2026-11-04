@@ -5,8 +5,9 @@
 package linux
 
 import (
+	"context"
+	"errors"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/dev-prophet-code/dd-installer/internal/model"
@@ -34,17 +35,8 @@ func (linux) LocalSupport() platform.LocalSupport {
 
 func (linux) LocalRunner(model.Config) (transport.Runner, error) { return transport.NewLocal(), nil }
 
-func (linux) OpenBrowser(url string) error {
-	for _, c := range []string{"xdg-open", "gio", "sensible-browser"} {
-		if p, err := exec.LookPath(c); err == nil {
-			args := []string{url}
-			if c == "gio" {
-				args = []string{"open", url}
-			}
-			return exec.Command(p, args...).Start()
-		}
-	}
-	return exec.ErrNotFound
+func (linux) ProvisionLocal(context.Context, func(string)) (bool, error) {
+	return false, errors.New("nothing to provision on Linux")
 }
 
 func (linux) DefaultSSHKeys() []string { return platforms.SSHKeyCandidates() }

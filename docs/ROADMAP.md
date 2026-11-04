@@ -5,7 +5,8 @@
 * Verify the per-Sietch PvP/PvE selectors against a running game; promote from *experimental*.
 * Pin upstream release (`DUNE_RELEASE_SHA256`, tag selection) instead of "latest".
 * SSH keyboard-interactive and jump-host support.
-* Optional native window (Wails/Tauri) around the same core; signed installers (MSI/notarised dmg/AppImage).
+* Signed installers (MSI, notarised `.app`/dmg, AppImage); Linux arm64 build; per-OS native look polish.
+* Verify WSL2 provisioning (UAC, reboot handling) on real Windows 10/11 machines.
 * Resume-after-failure state, import of an existing install, Linux distro matrix in CI.
 * Optional step for the Hyper-V Director travel-fix repository for Funcom's official Hyper-V servers.
 * Localisation (English only for now).

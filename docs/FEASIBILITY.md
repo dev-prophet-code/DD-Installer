@@ -25,4 +25,4 @@ The Hyper-V repository (`dune-awakening-hyperv-director-travel-fix`) is a separa
 
 ## Architecture choice
 
-A Go core compiled once per OS (no CGO, trivial cross-compilation) with an embedded web GUI served on `127.0.0.1`. Alternatives considered: Electron (large), Tauri/Wails (needs per-OS native toolchains and WebView dependencies; a good later wrapper around the same core - see roadmap).
+A Go core shared by all platforms plus a **native desktop UI built with Fyne** (real OS windows and widgets - no browser, no web server). Because the GUI toolkit needs CGO, each OS is built on its own machine (GitHub runners). Alternatives considered: a local web UI (rejected: the requirement is a native application), Electron (large, web-based), Wails/Tauri (WebView-based), and three separate native UIs (WinUI, SwiftUI, GTK: best look, triple the code). Because the UI only talks to `internal/app.Controller`, a dedicated per-OS UI can be added later without touching the core.

@@ -1,4 +1,8 @@
-# DD-Installer
+<p align="center">
+  <img src="docs/images/logo.png" alt="DD-Installer logo" width="180">
+</p>
+
+<h1 align="center">DD-Installer</h1>
 
 Native desktop installer for **[Dune: Awakening Docker](https://github.com/Red-Blink/dune-awakening-selfhost-docker)** (self-hosted Dune: Awakening dedicated server).
 
@@ -35,9 +39,9 @@ Get the latest release from the **[Releases page](../../releases)**:
 | OS | File |
 |---|---|
 | Windows (x64) | `dd-installer-windows-amd64.zip` |
-| macOS (Apple Silicon) | `dd-installer-macos-arm64.tar.gz` |
-| macOS (Intel) | `dd-installer-macos-amd64.tar.gz` |
-| Linux (x64) | `dd-installer-linux-amd64.tar.gz` |
+| macOS (Apple Silicon) | `dd-installer-macos-arm64.tar.gz` (contains `DD-Installer.app`) |
+| macOS (Intel) | `dd-installer-macos-amd64.tar.gz` (contains `DD-Installer.app`) |
+| Linux (x64) | `dd-installer-linux-amd64.tar.gz` (run `./install-desktop.sh` inside to add a menu entry with icon) |
 
 Verify the download with `SHA256SUMS`. The programs are **not code-signed yet**, so Windows SmartScreen and macOS Gatekeeper will warn (see the notes in [platforms/](platforms)). Releases are built automatically by GitHub Actions; see [Releases and versions](#releases-and-versions).
 

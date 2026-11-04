@@ -1,14 +1,10 @@
 package ui
 
 import (
-	"bytes"
 	"image"
 	"image/color"
-	"image/png"
 	"math"
 	"math/rand"
-
-	"fyne.io/fyne/v2"
 )
 
 func lerp(a, b, t float64) float64 { return a + (b-a)*t }
@@ -132,33 +128,4 @@ func moon(img *image.NRGBA, cx, cy, r int, col color.NRGBA) {
 			}
 		}
 	}
-}
-
-// appIcon draws a small round emblem (twin moons over a dune) as the window icon.
-func appIcon() fyne.Resource {
-	const s = 256
-	img := image.NewNRGBA(image.Rect(0, 0, s, s))
-	for y := 0; y < s; y++ {
-		for x := 0; x < s; x++ {
-			d := math.Hypot(float64(x-s/2), float64(y-s/2))
-			if d > s/2-4 {
-				continue
-			}
-			t := float64(y) / s
-			img.SetNRGBA(x, y, mix(color.NRGBA{R: 0x0b, G: 0x08, B: 0x10, A: 255}, color.NRGBA{R: 0xb8, G: 0x58, B: 0x18, A: 255}, math.Pow(t, 1.4)))
-		}
-	}
-	moon(img, 150, 92, 30, color.NRGBA{R: 0xf1, G: 0xdc, B: 0xb0, A: 255})
-	moon(img, 98, 70, 14, color.NRGBA{R: 0xd7, G: 0xe0, B: 0xea, A: 255})
-	for x := 0; x < s; x++ {
-		y := int(float64(s)*0.74 + 18*math.Sin(float64(x)/s*6.0+1.0))
-		for yy := y; yy < s; yy++ {
-			if math.Hypot(float64(x-s/2), float64(yy-s/2)) <= s/2-4 {
-				img.SetNRGBA(x, yy, color.NRGBA{R: 0x1a, G: 0x0a, B: 0x05, A: 255})
-			}
-		}
-	}
-	var buf bytes.Buffer
-	_ = png.Encode(&buf, img)
-	return fyne.NewStaticResource("icon.png", buf.Bytes())
 }

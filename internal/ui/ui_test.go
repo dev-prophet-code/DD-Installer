@@ -156,11 +156,14 @@ func TestEventsRender(t *testing.T) {
 func TestProvisionOfferedWhenWSLMissing(t *testing.T) {
 	pf := &fakePF{id: "windows", ls: platform.LocalSupport{Reason: "No Ubuntu WSL2 distribution found.", CanProvision: true, ProvisionHint: "install it"}}
 	z := newTest(t, pf)
+	if z.provisionBtn.Visible() {
+		t.Fatal("the offer belongs to the local target only, not to SSH")
+	}
+	z.target.SetSelected(optLocal)
 	if !z.provisionBtn.Visible() {
 		t.Fatal("WSL install offer must be visible when WSL/Ubuntu is missing")
 	}
 	// Choosing local without WSL must not let the wizard continue.
-	z.target.SetSelected(optLocal)
 	z.onNext()
 	if z.cur != 0 || !strings.Contains(z.errLabel.Text, "not possible") {
 		t.Fatalf("local without WSL must block: %q", z.errLabel.Text)

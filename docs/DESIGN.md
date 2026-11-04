@@ -15,8 +15,12 @@ The installer is styled to feel at home in the world of **Dune: Awakening**: Arr
 | **Glow** | Title colour breathes between spice and gold; a light glint travels along the header line |
 | **Transitions** | A dark veil fades away on every page change |
 | **Panels** | Translucent sandstone cards with a thin spice edge so the dunes stay visible |
-| **Icon** | Twin moons over a dune, drawn in code (`appIcon`) |
+| **Logo** | The project logo (sandworm emblem in a hexagon, provided by the project owner) in `internal/ui/assets/logo.png`: window icon, header, README, macOS app icon, Linux menu icon |
 | **Cross-platform** | Fyne draws everything itself, so fonts, colours and effects are identical on all three systems |
+
+## Logo usage
+
+The emblem is cut out from the supplied artwork (text removed, transparent background). It is a project logo, not an official Funcom/Dune asset. Source of truth: `internal/ui/assets/logo.png` (the README copy is `docs/images/logo.png`).
 
 ## Changing the look
 

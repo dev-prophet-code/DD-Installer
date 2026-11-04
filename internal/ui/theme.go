@@ -18,6 +18,11 @@ var (
 	//go:embed assets/fonts/CinzelDecorative-Bold.ttf
 	cinzelBold []byte
 
+	//go:embed assets/logo.png
+	logoPNG []byte
+
+	logoRes = fyne.NewStaticResource("dd-installer.png", logoPNG)
+
 	fontBody    = fyne.NewStaticResource("Rajdhani-Regular.ttf", rajdhaniRegular)
 	fontBodyB   = fyne.NewStaticResource("Rajdhani-Bold.ttf", rajdhaniBold)
 	fontHeading = fyne.NewStaticResource("CinzelDecorative-Bold.ttf", cinzelBold)

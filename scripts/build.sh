@@ -26,15 +26,32 @@ pack() { # name ext archive-kind
   esac
 }
 
+# macOS only: builds icon.icns from the logo with the system tools sips/iconutil.
+make_icns() {
+  local out="$1" set="dist/stage/icon.iconset" src=internal/ui/assets/logo.png
+  mkdir -p "$set"
+  for s in 16 32 128 256 512; do
+    sips -z $s $s "$src" --out "$set/icon_${s}x${s}.png" >/dev/null
+    sips -z $((s*2)) $((s*2)) "$src" --out "$set/icon_${s}x${s}@2x.png" >/dev/null
+  done
+  iconutil -c icns "$set" -o "$out"
+}
+
 case "$(uname -s)" in
   Linux)
     name=dd-installer-linux-amd64; mkdir -p "dist/stage/$name"
     CGO_ENABLED=1 go build -trimpath -ldflags "$LDFLAGS" -o "dist/stage/$name/dd-installer" ./cmd/dd-installer
+    cp internal/ui/assets/logo.png "dist/stage/$name/dd-installer.png"
+    cp platforms/linux/packaging/dd-installer.desktop platforms/linux/packaging/install-desktop.sh "dist/stage/$name/"
     pack "$name" "" tgz ;;
   Darwin)
     for arch in arm64 amd64; do
       name="dd-installer-macos-$arch"; mkdir -p "dist/stage/$name"
-      CGO_ENABLED=1 GOARCH=$arch go build -trimpath -ldflags "$LDFLAGS" -o "dist/stage/$name/dd-installer" ./cmd/dd-installer
+      app="dist/stage/$name/DD-Installer.app"
+      mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+      CGO_ENABLED=1 GOARCH=$arch go build -trimpath -ldflags "$LDFLAGS" -o "$app/Contents/MacOS/dd-installer" ./cmd/dd-installer
+      sed "s/@VERSION@/${VERSION%%-*}/" platforms/macos/packaging/Info.plist.in > "$app/Contents/Info.plist"
+      make_icns "$app/Contents/Resources/icon.icns" || echo "note: could not create the app icon (continuing without it)"
       pack "$name" "" tgz
     done ;;
   MINGW*|MSYS*|CYGWIN*)

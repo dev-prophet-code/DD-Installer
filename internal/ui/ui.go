@@ -104,7 +104,7 @@ type wizard struct {
 func Run(c *app.Controller) {
 	a := fyneapp.NewWithID("io.github.dev-prophet-code.dd-installer")
 	a.Settings().SetTheme(duneTheme{})
-	a.SetIcon(appIcon())
+	a.SetIcon(logoRes)
 	w, _ := newWizard(a, c)
 	w.ShowAndRun()
 }
@@ -144,7 +144,11 @@ func (z *wizard) layout() fyne.CanvasObject {
 	more := widget.NewButton("Disclaimer", z.showDisclaimer)
 	banner := panel(container.NewBorder(nil, nil, nil, more, disc))
 	z.steps = newStepBar(stepNames)
-	top := container.NewVBox(container.NewPadded(container.NewVBox(title, sub)), newShimmer(), banner, container.NewPadded(z.steps.box))
+	logo := canvas.NewImageFromResource(logoRes)
+	logo.FillMode = canvas.ImageFillContain
+	logo.SetMinSize(fyne.NewSize(72, 72))
+	head := container.NewBorder(nil, nil, logo, nil, container.NewVBox(layout.NewSpacer(), title, sub, layout.NewSpacer()))
+	top := container.NewVBox(container.NewPadded(head), newShimmer(), banner, container.NewPadded(z.steps.box))
 
 	z.errLabel = widget.NewLabel("")
 	z.errLabel.Wrapping = fyne.TextWrapWord
@@ -280,7 +284,7 @@ func (z *wizard) refreshLocal() {
 			z.wslDistro.SetSelected(ls.Distros[0])
 		}
 	}
-	if !ls.Supported && ls.CanProvision {
+	if !ls.Supported && ls.CanProvision && z.target.Selected == optLocal {
 		z.provisionBtn.Show()
 	} else {
 		z.provisionBtn.Hide()

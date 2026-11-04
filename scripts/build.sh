@@ -8,7 +8,7 @@
 #   Windows: a MinGW-w64 gcc on PATH (preinstalled on GitHub runners)
 set -euo pipefail
 cd "$(dirname "$0")/.."
-VERSION="${VERSION:-0.2.0-draft}"
+VERSION="${VERSION:-$(tr -d '[:space:]' < VERSION)}"
 LDFLAGS="-s -w -X github.com/dev-prophet-code/dd-installer/internal/app.Version=$VERSION"
 rm -rf dist && mkdir -p dist/stage
 

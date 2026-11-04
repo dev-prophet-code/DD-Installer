@@ -2,7 +2,7 @@
 
 A cross-platform **native desktop installer for [Dune: Awakening Docker](https://github.com/Red-Blink/dune-awakening-selfhost-docker)** (self-hosted Dune: Awakening dedicated server). One real application per operating system - **Linux, macOS, Windows** (native window, no web interface, no browser) - installs the server either on **this computer** or on a **remote Linux server over SSH**.
 
-> **Status: first draft (v0.1).** The core logic is implemented and unit-tested; end-to-end runs against real servers still need validation. See [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Status: alpha (v0.0.2-alpha).** The core logic is implemented and unit-tested; end-to-end runs against real servers still need validation. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 > **Disclaimer.** Unofficial community tool, not affiliated with Funcom or RedBlink. DD-Installer **does not store your credentials** (SSH password, key passphrase, Funcom token are kept in memory only), and **neither RedBlink (author of Dune: Awakening Docker) nor Prophet (author of DD-Installer) can be held liable** for any damage. Full text: [docs/DISCLAIMER.md](docs/DISCLAIMER.md).
 
@@ -48,7 +48,7 @@ The *target* must be x86-64 Linux with AVX2, >= 20 GB RAM (30-40 GB+ with more m
 
 Ready-made programs are built automatically by GitHub Actions on every push to `main`:
 
-**[Releases](../../releases)** - `latest` is the rolling build of `main`; tagged versions (`v0.x.y`) are regular releases.
+**[Releases](../../releases)** - versioned (`v0.0.2-alpha`, ...). The version number lives in the [`VERSION`](VERSION) file; versions with `-alpha`/`-beta` are marked as pre-releases.
 
 | OS | File |
 |---|---|
@@ -56,7 +56,7 @@ Ready-made programs are built automatically by GitHub Actions on every push to `
 | macOS (Apple Silicon / Intel) | `dd-installer-macos-arm64.tar.gz` / `...-amd64.tar.gz` |
 | Linux (x64) | `dd-installer-linux-amd64.tar.gz` |
 
-Verify with `SHA256SUMS`. The binaries are **not code-signed** yet: Windows SmartScreen and macOS Gatekeeper will warn (see the platform folders). To publish a version: `git tag v0.1.0 && git push origin v0.1.0`.
+Verify with `SHA256SUMS`. The binaries are **not code-signed** yet: Windows SmartScreen and macOS Gatekeeper will warn (see the platform folders). To publish a new version: change the number in `VERSION` and push to `main` - the release `v<VERSION>` is built and published automatically (pushing the same version again replaces that release).
 
 ## Build & run
 

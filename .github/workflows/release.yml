@@ -1,12 +1,13 @@
 name: Release
-# Every push to main builds the native app on each OS and refreshes the
-# rolling "latest" pre-release. Pushing a tag like v0.2.0 creates a versioned
-# release. The GUI needs CGO, so every OS builds on its own runner; a slow
-# runner for one OS never blocks the others from being published.
+# Versioned releases. The version comes from the VERSION file in the repo root
+# (e.g. 0.0.2-alpha). Every push to main builds the native app on each OS and
+# publishes release v<VERSION>; a version containing "-" (alpha/beta/rc) is
+# marked as a pre-release. Re-pushing the same version replaces that release
+# (tag and files); bump VERSION to publish a new one. Each OS builds on its own
+# runner (the GUI needs CGO), so a slow runner never blocks the others.
 on:
   push:
     branches: [main]
-    tags: ['v*']
   workflow_dispatch:
 permissions:
   contents: write
@@ -41,8 +42,7 @@ jobs:
       - run: go vet ./... && go test ./...
       - name: Build
         run: |
-          if [ "${GITHUB_REF_TYPE}" = tag ]; then V="${GITHUB_REF_NAME#v}"; else V="0.0.0-main.$(git rev-parse --short HEAD)"; fi
-          VERSION="$V" ./scripts/build.sh
+          ./scripts/build.sh
       - uses: actions/upload-artifact@v4
         with:
           name: dd-installer-${{ matrix.name }}
@@ -61,17 +61,16 @@ jobs:
           merge-multiple: true
       - name: Checksums
         run: cd dist && ls && sha256sum * > SHA256SUMS
-      - name: Publish release (tag)
-        if: github.ref_type == 'tag'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes
-      - name: Publish rolling "latest" (main)
-        if: github.ref == 'refs/heads/main'
+      - name: Publish versioned release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          V="$(tr -d '[:space:]' < VERSION)"
+          TAG="v$V"
+          PRE=""; case "$V" in *-*) PRE="--prerelease" ;; esac
+          # one-time cleanup of the old rolling release
           gh release delete latest --cleanup-tag --yes || true
-          gh release create latest dist/* --target "$GITHUB_SHA" --prerelease \
-            --title "Latest build (main)" \
-            --notes "Automatic build of the current main branch ($GITHUB_SHA). Draft quality - read the disclaimer in the archive. Verify downloads with SHA256SUMS. Files missing here belong to an OS runner that did not finish; re-run the workflow."
+          gh release delete "$TAG" --cleanup-tag --yes || true
+          gh release create "$TAG" dist/* --target "$GITHUB_SHA" $PRE \
+            --title "DD-Installer $V" \
+            --notes "DD-Installer $V (commit $GITHUB_SHA). Early alpha: not code-signed, not yet tested on real Windows/macOS machines. Read the disclaimer in the archive (no credentials are stored; no liability of RedBlink or Prophet). Verify downloads with SHA256SUMS. A missing file means that OS runner did not finish - re-run the workflow."

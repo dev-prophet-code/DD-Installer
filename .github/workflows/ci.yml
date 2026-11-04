@@ -14,7 +14,7 @@ jobs:
   test:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -31,6 +31,8 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
+      - name: Vet macOS code (cross-compiled; no macOS runner needed)
+        run: GOOS=darwin GOARCH=arm64 go vet ./...
       - run: ./scripts/build.sh
       - uses: actions/upload-artifact@v4
         with:

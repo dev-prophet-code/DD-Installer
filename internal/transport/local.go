@@ -26,6 +26,7 @@ func (l *Local) Run(ctx context.Context, script string, out io.Writer) (int, err
 		return -1, errors.New("local runner has no command")
 	}
 	cmd := exec.CommandContext(ctx, l.Cmd[0], l.Cmd[1:]...)
+	HideWindow(cmd) // no flashing console window on Windows
 	cmd.Stdin = strings.NewReader(script)
 	cmd.Stdout = out
 	cmd.Stderr = out

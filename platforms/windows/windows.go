@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 	"unicode/utf16"
 
 	"github.com/dev-prophet-code/dd-installer/internal/model"
@@ -27,8 +28,15 @@ func (win) ID() string          { return "windows" }
 func (win) DisplayName() string { return "Windows" }
 
 // distros lists installed WSL2 distributions suitable for Dune Docker.
-func distros() []string {
-	out, err := exec.Command("wsl.exe", "-l", "-q").Output()
+func distros() []string { return distroCache.get(listDistros) }
+
+// distroCache avoids starting wsl.exe again on every click in the wizard.
+var distroCache = newListCache(8 * time.Second)
+
+func listDistros() []string {
+	cmd := exec.Command("wsl.exe", "-l", "-q")
+	transport.HideWindow(cmd)
+	out, err := cmd.Output()
 	if err != nil {
 		return nil
 	}
@@ -79,7 +87,9 @@ func (w win) ProvisionLocal(ctx context.Context, log func(string)) (bool, error)
 		log("Installing WSL2 and Ubuntu. Please confirm the Windows administrator prompt (UAC)...")
 		c := installCommand()
 		cmd := exec.CommandContext(ctx, c[0], c[1:]...)
+		transport.HideWindow(cmd) // the UAC prompt is shown by Windows itself
 		out, err := cmd.CombinedOutput()
+		distroCache.invalidate()
 		if len(out) > 0 {
 			log(strings.TrimSpace(string(out)))
 		}
@@ -110,7 +120,10 @@ func (w win) ProvisionLocal(ctx context.Context, log func(string)) (bool, error)
 	if err != nil || code != 0 {
 		return false, fmt.Errorf("could not prepare Ubuntu (exit %d): %v", code, err)
 	}
-	_ = exec.CommandContext(ctx, "wsl.exe", "--terminate", name).Run() // apply wsl.conf
+	term := exec.CommandContext(ctx, "wsl.exe", "--terminate", name)
+	transport.HideWindow(term)
+	_ = term.Run() // apply wsl.conf
+	distroCache.invalidate()
 	log("Ubuntu is ready.")
 	return false, nil
 }

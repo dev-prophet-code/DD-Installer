@@ -547,10 +547,15 @@ func (z *wizard) pageInstall() fyne.CanvasObject {
 	z.assist = container.NewVBox()
 	z.logEntry = widget.NewMultiLineEntry()
 	z.logEntry.Wrapping = fyne.TextWrapBreak
-	z.logEntry.SetMinRowsVisible(14)
-	return container.NewVScroll(container.NewVBox(
+	z.logEntry.SetMinRowsVisible(8)
+	z.logEntry.SetPlaceHolder("Installation log")
+	head := container.NewVBox(
 		heading("Begin the installation", 24),
-		z.summary, z.accept, container.NewHBox(z.install, z.cancel), z.progress, z.assist, z.logEntry))
+		z.summary, z.accept, container.NewHBox(z.install, z.cancel), widget.NewSeparator())
+	left := container.NewVScroll(container.NewVBox(caption(spaced("Progress"), colSpice, 13), z.progress, z.assist))
+	split := container.NewHSplit(left, container.NewBorder(caption(spaced("Log"), colSpice, 13), nil, nil, nil, z.logEntry))
+	split.SetOffset(0.42)
+	return container.NewBorder(head, nil, nil, nil, split)
 }
 
 func (z *wizard) updateInstallBtn() {

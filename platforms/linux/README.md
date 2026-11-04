@@ -5,3 +5,4 @@
 * Build: `sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev && ./scripts/build.sh` (CGO; amd64).
 * Packaging ideas: tar.gz (built by `scripts/build.sh`), AppImage/.deb later.
 * Needs a desktop session (X11/Wayland with OpenGL). For servers without a desktop, run the installer on your own computer and use the SSH target.
+* Look: the Dune-inspired theme is drawn by the toolkit and is identical to the other systems; it needs OpenGL (a normal desktop session has it).

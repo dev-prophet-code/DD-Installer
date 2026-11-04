@@ -23,7 +23,7 @@ The installer is styled to feel at home in the world of **Dune: Awakening**: Arr
 * Colours and sizes: `internal/ui/theme.go`.
 * Backdrop: `renderBackdrop` in `art.go` (sky colours, ridge heights, moons).
 * Effects: speed/amount of sand in `newMotes(n)` and `motes.setStorm`, glow timing in `effects.go`.
-* Preview without a display: `DD_SHOTS=/some/dir go test ./internal/ui -run TestShots` writes PNGs of every page and dialog.
+* Preview without a display: `DD_SHOTS=$PWD/docs/images go test ./internal/ui -run TestShots` renders every page and dialog with example data; these are the pictures shown in the README. Re-run it after a design change and commit the new images.
 
 ## Credits
 

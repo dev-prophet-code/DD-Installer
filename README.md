@@ -8,6 +8,26 @@ One real application per operating system - **Windows, macOS, Linux** - with a n
 
 > **Disclaimer.** Unofficial community tool, not affiliated with Funcom or RedBlink. DD-Installer **does not store your credentials** (SSH password, key passphrase and Funcom token stay in memory for the session only). **Neither RedBlink (author of Dune: Awakening Docker) nor Prophet (author of DD-Installer) can be held liable** for any damage. Full text: [docs/DISCLAIMER.md](docs/DISCLAIMER.md). The app asks you to accept it before installing.
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/images/01-target.png" alt="Step 1: choose the target - this computer or a remote Linux server over SSH" width="49%">
+  <img src="docs/images/02-server.png" alt="Step 2: server title, region, web console port and Funcom token" width="49%">
+</p>
+<p align="center">
+  <img src="docs/images/03-layout.png" alt="Step 3: name your Sietches, set PvE or PvP and choose the Deep Desert layout" width="49%">
+  <img src="docs/images/04-scan.png" alt="Step 4: system scan with RAM, CPU and disk analysis and tuning" width="49%">
+</p>
+<p align="center">
+  <img src="docs/images/05-install.png" alt="Step 5: installation with live progress, log and the problem-solving assistant" width="49%">
+  <img src="docs/images/06-ssh-key.png" alt="Built-in SSH key helper with copy-paste commands for your system" width="49%">
+</p>
+<p align="center">
+  <img src="docs/images/07-wsl.png" alt="Windows: the installer offers to install WSL2 and Ubuntu if they are missing" width="49%">
+</p>
+
+*The screenshots show the five steps of the wizard with example data (no real server). The sand, glow and sandstorm effects are animated in the real application.*
+
 ## Download
 
 Get the latest release from the **[Releases page](../../releases)**:

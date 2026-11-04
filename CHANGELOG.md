@@ -2,6 +2,13 @@
 
 Versions follow the number in the [`VERSION`](VERSION) file. Newest first.
 
+## 0.0.3-alpha
+
+* New Dune: Awakening inspired look and feel: Arrakis-night theme, embedded fonts (Rajdhani, Cinzel Decorative), generated desert backdrop with moons and dunes, drifting sand, glow and shimmer effects, page transitions, sandstorm during installation. Identical on Windows, macOS and Linux.
+* SSH made easy: in-app **Create SSH key** (Ed25519, owner-only permissions, never overwrites) with copy-paste commands for Windows/macOS/Linux, in-app **SSH help**, and a beginner guide ([docs/SSH-GUIDE.md](docs/SSH-GUIDE.md)).
+* Fix: pages are re-laid out when the wizard changes step.
+* Docs: new design documentation and font credits; disclaimer mentions the key helper.
+
 ## 0.0.2-alpha
 
 * Native desktop application (Fyne) for Windows, macOS and Linux; the web interface was removed.

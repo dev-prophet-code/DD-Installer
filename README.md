@@ -4,7 +4,7 @@ Native desktop installer for **[Dune: Awakening Docker](https://github.com/Red-B
 
 One real application per operating system - **Windows, macOS, Linux** - with a native window (no web interface, no browser). It installs the server either on **this computer** or on a **remote Linux server over SSH**, creates your Sietches and Deep Desert layout, and tunes the setup to the machine.
 
-> **Status: alpha (`0.0.2-alpha`).** The core logic is implemented and unit-tested. It has **not yet been tested end to end** on real servers or on real Windows/macOS machines. Expect rough edges. See the [roadmap](docs/ROADMAP.md) and the [changelog](CHANGELOG.md).
+> **Status: alpha (`0.0.3-alpha`).** The core logic is implemented and unit-tested. It has **not yet been tested end to end** on real servers or on real Windows/macOS machines. Expect rough edges. See the [roadmap](docs/ROADMAP.md) and the [changelog](CHANGELOG.md).
 
 > **Disclaimer.** Unofficial community tool, not affiliated with Funcom or RedBlink. DD-Installer **does not store your credentials** (SSH password, key passphrase and Funcom token stay in memory for the session only). **Neither RedBlink (author of Dune: Awakening Docker) nor Prophet (author of DD-Installer) can be held liable** for any damage. Full text: [docs/DISCLAIMER.md](docs/DISCLAIMER.md). The app asks you to accept it before installing.
 
@@ -31,7 +31,9 @@ Verify the download with `SHA256SUMS`. The programs are **not code-signed yet**,
 | **Deep Desert** | 1-3 instances. Upstream rules apply: the first instance keeps its existing ruleset, the second gets the opposite, only the third is selectable. |
 | **System scan and tuning** | Probes CPU (AVX2), RAM, swap, disk, Docker, sudo, ports and WSL; blocks impossible setups; recommends a layout and tuning (PostgreSQL, RabbitMQ, swap, `.wslconfig`). |
 | **Problem-solving assistant** | If a step fails, the error is matched against rules built from the official documentation. Safe fixes run automatically, risky ones need your approval, nothing destructive is ever done. See [docs/ASSISTANT.md](docs/ASSISTANT.md). |
-| **Secret hygiene** | Nothing is written to disk by the installer; secrets are masked in logs and before the assistant sees any output. |
+| **Dune look and feel** | Arrakis-night design with sand, moons, glow effects and a sandstorm while installing; identical on all systems ([docs/DESIGN.md](docs/DESIGN.md)). |
+| **SSH made easy** | Built-in **Create SSH key** helper and **SSH help**, plus a beginner guide with every command for Windows, macOS and Linux: [docs/SSH-GUIDE.md](docs/SSH-GUIDE.md). |
+| **Secret hygiene** | Nothing is written to disk by the installer (except an SSH key pair you explicitly create with the key helper, in your `~/.ssh`); secrets are masked in logs and before the assistant sees any output. |
 
 ## Requirements
 
@@ -91,7 +93,9 @@ scripts/            build helper
 
 ## Documentation
 
-[Feasibility](docs/FEASIBILITY.md) | [Architecture](docs/ARCHITECTURE.md) | [Sizing](docs/SIZING.md) | [Assistant](docs/ASSISTANT.md) | [Security](docs/SECURITY.md) | [Disclaimer](docs/DISCLAIMER.md) | [Roadmap](docs/ROADMAP.md) | [Changelog](CHANGELOG.md)
+[SSH guide](docs/SSH-GUIDE.md) | [Design](docs/DESIGN.md) | [Feasibility](docs/FEASIBILITY.md) | [Architecture](docs/ARCHITECTURE.md) | [Sizing](docs/SIZING.md) | [Assistant](docs/ASSISTANT.md) | [Security](docs/SECURITY.md) | [Disclaimer](docs/DISCLAIMER.md) | [Roadmap](docs/ROADMAP.md) | [Changelog](CHANGELOG.md)
+
+Fonts: Rajdhani and Cinzel Decorative (SIL OFL 1.1), UI toolkit Fyne (BSD-3-Clause). See [docs/DESIGN.md](docs/DESIGN.md).
 
 Upstream project and documentation: <https://github.com/Red-Blink/dune-awakening-selfhost-docker>, <https://docs.dunedocker.app/>
 

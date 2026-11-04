@@ -7,6 +7,9 @@ import (
 
 const docs = "https://docs.dunedocker.app/"
 
+// sshGuide is the beginner SSH guide of this project.
+const sshGuide = "https://github.com/dev-prophet-code/DD-Installer/blob/main/docs/SSH-GUIDE.md"
+
 func re(p string) *regexp.Regexp { return regexp.MustCompile("(?i)" + p) }
 
 // pkgInstall returns a script that installs packages with whichever package
@@ -279,7 +282,7 @@ if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then $SUD
 			Steps:   []string{"connect"},
 			Pattern: re(`connection refused`),
 			Explain: "Nothing accepts connections on that host/port. Check the port, that sshd is running (`sudo systemctl enable --now ssh`) and firewalls.",
-			Risk:    RiskManual,
+			Risk:    RiskManual, DocURL: sshGuide,
 			Actions: func(Context) []Action {
 				return []Action{{Description: "Verify host, port and that the OpenSSH server is installed and running."}}
 			},
@@ -289,7 +292,7 @@ if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then $SUD
 			Steps:   []string{"connect"},
 			Pattern: re(`i/o timeout|no route to host|network is unreachable`),
 			Explain: "The server is not reachable from this computer (wrong IP, VPN needed, or a firewall/security group blocks TCP 22).",
-			Risk:    RiskManual,
+			Risk:    RiskManual, DocURL: sshGuide,
 			Actions: func(Context) []Action {
 				return []Action{{Description: "Check the IP/hostname, VPN and the provider's firewall rules for the SSH port."}}
 			},
@@ -299,7 +302,7 @@ if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then $SUD
 			Steps:   []string{"connect"},
 			Pattern: re(`unable to authenticate|permission denied \(|no supported methods remain|passphrase`),
 			Explain: "The server rejected the credentials. Check user name, key file (and passphrase) or password; many servers disable password login.",
-			Risk:    RiskManual,
+			Risk:    RiskManual, DocURL: sshGuide,
 			Actions: func(Context) []Action {
 				return []Action{{Description: "Use the key authorised in ~/.ssh/authorized_keys of that user, or enable PasswordAuthentication in sshd_config."}}
 			},

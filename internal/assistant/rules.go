@@ -89,12 +89,12 @@ func Rules() []Rule {
 			},
 		},
 		{
-			ID: "pkg-lock", Title: "Package manager is busy",
+			ID: "pkg-lock", MaxUses: 3, Title: "Package manager is busy",
 			Pattern: re(`could not get lock|unable to acquire the dpkg frontend lock|dpkg frontend lock|another process is using|waiting for cache lock|is another process using it`),
-			Explain: "Another package operation (often automatic updates on a fresh server) holds the package lock. The installer waits for it to finish and retries.",
+			Explain: "Another package operation (often automatic updates on a fresh server) holds the package lock. The installer waits for it to finish and retries (up to three times).",
 			Risk:    RiskSafe,
 			Actions: func(Context) []Action {
-				return []Action{{Description: "Wait up to 5 minutes for the package lock, then retry.", Wait: 60, Retry: true}}
+				return []Action{{Description: "Wait 90 seconds for the package lock, then retry.", Wait: 90, Retry: true}}
 			},
 		},
 		{
@@ -190,7 +190,7 @@ if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then $SUD
 			},
 		},
 		{
-			ID: "steamcmd", Title: "SteamCMD could not download the game",
+			ID: "steamcmd", MaxUses: 3, Title: "SteamCMD could not download the game",
 			Pattern: re(`steamcmd.*(fail|error|timeout|nxdomain|content)|failed to (download|install).*(game|depot)|app update.*fail|state is 0x\d+ after update job`),
 			Explain: "Steam content hosts are sometimes unreachable or resolve badly (a documented past incident). Upstream ships `dune update fix-steamcmd`; the installer runs it and retries after a pause. Large downloads may also simply need more time.",
 			Risk:    RiskSafe, DocURL: docs + "operations/troubleshooting",
@@ -216,8 +216,8 @@ if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then $SUD
 			},
 		},
 		{
-			ID: "console-down", Title: "Web console is not reachable",
-			Steps:   []string{"console-setup"},
+			ID: "console-down", MaxUses: 3, Title: "Web console is not reachable",
+			Steps:   []string{"console-setup", "start", "layout"},
 			Pattern: re(`dd_err console-not-reachable|connection refused|errno 111|remote end closed`),
 			Explain: "The Console container did not answer on its port. The installer restarts it and checks its log before retrying.",
 			Risk:    RiskSafe, DocURL: docs + "how-to/connection-problems",
@@ -230,7 +230,7 @@ if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then $SUD
 			},
 		},
 		{
-			ID: "login-rate-limit", Title: "Console sign-in rate limit",
+			ID: "login-rate-limit", MaxUses: 3, Title: "Console sign-in rate limit",
 			Pattern: re(`too many sign-in attempts|http 429`),
 			Explain: "The Console throttles sign-in attempts. The installer waits and tries again.",
 			Risk:    RiskSafe,
@@ -249,8 +249,8 @@ if command -v systemctl >/dev/null 2>&1 && [ -d /run/systemd/system ]; then $SUD
 			},
 		},
 		{
-			ID: "github-unreachable", Title: "GitHub or the network is unreachable",
-			Pattern: re(`github did not return|release download failed|could not resolve host|temporary failure in name resolution|connection timed out|tls|ssl.*(error|certificate)|curl: \(\d+\)`),
+			ID: "github-unreachable", MaxUses: 3, Title: "GitHub or the network is unreachable",
+			Pattern: re(`github did not return|release download failed|could not resolve host|temporary failure in name resolution|connection timed out|tls (handshake|error)|ssl.*(error|certificate)|curl: \(\d+\)`),
 			Explain: "A download from GitHub, Steam or a container registry failed. This is usually transient (DNS, rate limit or firewall). The installer retries with a pause and shows DNS diagnostics.",
 			Risk:    RiskSafe,
 			Actions: func(Context) []Action {

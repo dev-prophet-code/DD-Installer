@@ -340,7 +340,7 @@ elif phase == "layout":
 // ProbeScript runs the host scan against the folder the install will use
 // (or its nearest existing parent) so disk numbers are meaningful.
 func ProbeScript(cfg model.Config) string {
-	return fmt.Sprintf("D=\"%s\"\nwhile [ ! -d \"$D\" ] && [ \"$D\" != / ] && [ \"$D\" != . ]; do D=$(dirname \"$D\"); done\nDUNE_PROBE_DIR=\"$D\"; export DUNE_PROBE_DIR\n%s", dirExpr(cfg), probeScript())
+	return fmt.Sprintf("D=\"%s\"\nwhile [ ! -d \"$D\" ] && [ \"$D\" != / ] && [ \"$D\" != . ]; do D=$(dirname \"$D\"); done\nDUNE_PROBE_DIR=\"$D\"; export DUNE_PROBE_DIR\nDUNE_PROBE_WEB_PORT=%d; export DUNE_PROBE_WEB_PORT\n%s", dirExpr(cfg), cfg.WebPort, probeScript())
 }
 
 func probeScript() string { return probe.Script }

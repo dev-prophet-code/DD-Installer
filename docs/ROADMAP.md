@@ -4,6 +4,7 @@
 * Calibrate the RAM heuristic with real `dune memory status` data.
 * Verify the per-Sietch PvP/PvE selectors against a running game; promote from *experimental*.
 * Pin upstream release (`DUNE_RELEASE_SHA256`, tag selection) instead of "latest".
+* SSH keyboard-interactive and jump-host support.
 * Optional native window (Wails/Tauri) around the same core; signed installers (MSI/notarised dmg/AppImage).
 * Resume-after-failure state, import of an existing install, Linux distro matrix in CI.
 * Optional step for the Hyper-V Director travel-fix repository for Funcom's official Hyper-V servers.

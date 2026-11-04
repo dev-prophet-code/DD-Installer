@@ -53,7 +53,7 @@ type Server struct {
 	running bool
 	cancel  context.CancelFunc
 	events  []install.Event
-	subs    map[chan install.Event]struct{}
+	subs    map[chan struct{}]struct{}
 	confirm map[string]chan bool
 }
 
@@ -61,7 +61,7 @@ type Server struct {
 func New(pf platform.Platform) *Server {
 	b := make([]byte, 24)
 	_, _ = rand.Read(b)
-	s := &Server{token: hex.EncodeToString(b), pf: pf, subs: map[chan install.Event]struct{}{}, confirm: map[string]chan bool{}}
+	s := &Server{token: hex.EncodeToString(b), pf: pf, subs: map[chan struct{}]struct{}{}, confirm: map[string]chan bool{}}
 	s.routes()
 	return s
 }
@@ -338,13 +338,15 @@ func sanitize(s string, c model.Config) string {
 func (s *Server) emit(e install.Event) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if len(s.events) < 20000 {
+	// Log lines are capped; structural events (steps, diagnoses, done, error)
+	// are always kept so a long log can never hide the outcome.
+	if e.Type != "log" || len(s.events) < 50000 {
 		s.events = append(s.events, e)
 	}
 	for ch := range s.subs {
 		select {
-		case ch <- e:
-		default: // slow consumer; it can reload via replay
+		case ch <- struct{}{}:
+		default: // a wake-up is already pending
 		}
 	}
 }
@@ -417,11 +419,9 @@ func (s *Server) handleInstall(w http.ResponseWriter, r *http.Request) {
 			Confirm:            s.askConfirm,
 			Reconnect:          func(ctx context.Context) (transport.Runner, error) { return s.connect(ctx, c) },
 		}
-		err = install.Run(ctx, o)
-		if err != nil {
+		if err = install.Run(ctx, o); err != nil { // Run closes the runner
 			s.emit(install.Event{Type: "error", Msg: sanitize(err.Error(), c)})
 		}
-		run.Close()
 	}()
 }
 
@@ -484,31 +484,32 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-store")
-	ch := make(chan install.Event, 256)
+	wake := make(chan struct{}, 1)
+	wake <- struct{}{}
 	s.mu.Lock()
-	replay := append([]install.Event(nil), s.events...)
-	s.subs[ch] = struct{}{}
+	s.subs[wake] = struct{}{}
 	s.mu.Unlock()
-	defer func() { s.mu.Lock(); delete(s.subs, ch); s.mu.Unlock() }()
-	send := func(e install.Event) bool {
-		b, _ := json.Marshal(e)
-		_, err := io.WriteString(w, "data: "+string(b)+"\n\n")
-		fl.Flush()
-		return err == nil
-	}
-	for _, e := range replay {
-		if !send(e) {
-			return
-		}
-	}
+	defer func() { s.mu.Lock(); delete(s.subs, wake); s.mu.Unlock() }()
+	idx := 0
 	tk := time.NewTicker(20 * time.Second)
 	defer tk.Stop()
 	for {
 		select {
-		case e := <-ch:
-			if !send(e) {
-				return
+		case <-wake:
+			s.mu.Lock()
+			if idx > len(s.events) { // a new run reset the buffer
+				idx = 0
 			}
+			batch := append([]install.Event(nil), s.events[idx:]...)
+			idx = len(s.events)
+			s.mu.Unlock()
+			for _, e := range batch {
+				b, _ := json.Marshal(e)
+				if _, err := io.WriteString(w, "data: "+string(b)+"\n\n"); err != nil {
+					return
+				}
+			}
+			fl.Flush()
 		case <-tk.C:
 			_, _ = io.WriteString(w, ": keepalive\n\n")
 			fl.Flush()

@@ -116,7 +116,8 @@ func Run(ctx context.Context, o Options) error {
 		}
 	}()
 
-	fixed := map[string]int{} // rule -> times applied (each rule fixes a step once per run)
+	defer func() { _ = o.Runner.Close() }() // Run owns the runner (it may be replaced on reconnect)
+	fixed := map[string]int{}               // rule -> times applied; capped by the rule's MaxUses
 	for _, s := range steps {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -129,7 +130,7 @@ func Run(ctx context.Context, o Options) error {
 		attempts := 0
 		for {
 			script := s.Script(st)
-			code, out, err := runScript(ctx, o, red, script, secrets)
+			code, out, err := runScript(ctx, o, red, script)
 			if err == nil && code == 0 {
 				o.Emit(Event{Type: "step", Step: s.ID, Status: "ok", Msg: s.Title})
 				break
@@ -180,22 +181,17 @@ func solve(ctx context.Context, o *Options, st *state, stepID, tail, errStr stri
 			DocURL: "https://docs.dunedocker.app/operations/troubleshooting"}})
 		return false, false
 	}
+	manual := false
 	for i := range diags {
 		d := diags[i]
 		o.Emit(Event{Type: "diagnosis", Step: stepID, Diagnosis: &d})
-		if fixed[d.RuleID] > 0 {
-			o.Emit(Event{Type: "log", Msg: "Fix for \"" + d.Title + "\" was already tried in this run; not repeating it."})
+		if fixed[d.RuleID] >= d.MaxUses {
+			o.Emit(Event{Type: "log", Msg: "Fix for \"" + d.Title + "\" was already tried; not repeating it."})
 			continue
 		}
 		if d.Risk == assistant.RiskManual {
-			// Manual rules still may carry a plan patch-free script (WSL), so only report.
-			if hasScript(d) && o.Confirm != nil {
-				if !o.Confirm(ctx, d.RuleID, d) {
-					return false, true
-				}
-			} else {
-				return false, true
-			}
+			manual = true // instructions only; other matching rules may still be fixable
+			continue
 		}
 		if d.Risk == assistant.RiskModerate {
 			if o.Confirm == nil || !o.Confirm(ctx, d.RuleID, d) {
@@ -213,7 +209,7 @@ func solve(ctx context.Context, o *Options, st *state, stepID, tail, errStr stri
 					script = "DD_SUDO_PW=" + shq(sudoPW) + "\nexport DD_SUDO_PW\n" + script
 					st.sudoGrant = true
 				}
-				c, _, err := runScript(ctx, *o, newRedactor(o.Cfg.FuncomToken, sudoPW), withPrelude(script), "")
+				c, _, err := runScript(ctx, *o, newRedactor(o.Cfg.FuncomToken, sudoPW), withPrelude(script))
 				if err != nil || c != 0 {
 					o.Emit(Event{Type: "log", Msg: fmt.Sprintf("Fix action failed (exit %d)", c)})
 					ok = false
@@ -256,16 +252,7 @@ func solve(ctx context.Context, o *Options, st *state, stepID, tail, errStr stri
 			return false, true
 		}
 	}
-	return retry, false
-}
-
-func hasScript(d assistant.Diagnosis) bool {
-	for _, a := range d.Actions {
-		if a.Script != "" {
-			return true
-		}
-	}
-	return false
+	return retry, manual && !retry
 }
 
 func nextPort(p int) int {
@@ -288,7 +275,7 @@ func sshUser(cfg model.Config, h probe.Info) string {
 
 // runScript executes script on the runner, streaming redacted lines to the
 // GUI and returning the redacted output.
-func runScript(ctx context.Context, o Options, red *redactor, script, _ string) (int, string, error) {
+func runScript(ctx context.Context, o Options, red *redactor, script string) (int, string, error) {
 	var mu sync.Mutex
 	var all bytes.Buffer
 	w := &lineWriter{fn: func(line string) {

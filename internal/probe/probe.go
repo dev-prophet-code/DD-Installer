@@ -50,7 +50,7 @@ fi
 if [ "$(id -u 2>/dev/null)" != "0" ] && command -v sudo >/dev/null 2>&1; then
   sudo -n true 2>/dev/null && echo "sudo_nopasswd=1" || echo "sudo_nopasswd=0"
 fi
-for p in 8088 31982 31983 15432; do
+for p in ${DUNE_PROBE_WEB_PORT:-8088} 31982 31983 15432; do
   if command -v ss >/dev/null 2>&1; then
     ss -ltn 2>/dev/null | awk '{print $4}' | grep -q ":$p\$" && echo "port_busy_$p=1"
   fi

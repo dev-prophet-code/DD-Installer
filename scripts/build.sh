@@ -16,7 +16,12 @@ pack() { # name ext archive-kind
   local dir="dist/stage/$1"
   cp README.md docs/DISCLAIMER.md "$dir/"
   case "$3" in
-    zip) (cd dist/stage && zip -qr "../$1.zip" "$1") ;;
+    zip)
+      if command -v zip >/dev/null 2>&1; then
+        (cd dist/stage && zip -qr "../$1.zip" "$1")
+      else # Git Bash on Windows has no zip; PowerShell is always there
+        powershell.exe -NoProfile -Command "Compress-Archive -Path 'dist/stage/$1' -DestinationPath 'dist/$1.zip' -Force"
+      fi ;;
     tgz) tar -C dist/stage -czf "dist/$1.tar.gz" "$1" ;;
   esac
 }

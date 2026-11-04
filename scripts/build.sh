@@ -1,28 +1,42 @@
 #!/usr/bin/env bash
-# Cross-compiles dd-installer for every supported OS/arch into dist/ and
-# packages each build (tar.gz keeps the executable bit; zip for Windows).
+# Builds the native installer for the OS this script runs on and packages it
+# into dist/. The Fyne GUI needs CGO, so each OS is built on its own runner
+# (see .github/workflows/release.yml); there is no cross-compilation.
+#
+#   Linux:   sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev
+#   macOS:   Xcode command line tools
+#   Windows: a MinGW-w64 gcc on PATH (preinstalled on GitHub runners)
 set -euo pipefail
 cd "$(dirname "$0")/.."
-VERSION="${VERSION:-0.1.0-draft}"
-rm -rf dist && mkdir -p dist
-build() { # os arch name ext
-  local bin="dd-installer$4" dir="dist/stage/$3"
-  mkdir -p "$dir"
-  GOOS=$1 GOARCH=$2 CGO_ENABLED=0 go build -trimpath \
-    -ldflags "-s -w -X github.com/dev-prophet-code/dd-installer/internal/gui.Version=$VERSION" \
-    -o "$dir/$bin" ./cmd/dd-installer
+VERSION="${VERSION:-0.2.0-draft}"
+LDFLAGS="-s -w -X github.com/dev-prophet-code/dd-installer/internal/app.Version=$VERSION"
+rm -rf dist && mkdir -p dist/stage
+
+pack() { # name ext archive-kind
+  local dir="dist/stage/$1"
   cp README.md docs/DISCLAIMER.md "$dir/"
-  if [ "$1" = windows ]; then
-    (cd dist/stage && zip -qr "../$3.zip" "$3")
-  else
-    tar -C dist/stage -czf "dist/$3.tar.gz" "$3"
-  fi
+  case "$3" in
+    zip) (cd dist/stage && zip -qr "../$1.zip" "$1") ;;
+    tgz) tar -C dist/stage -czf "dist/$1.tar.gz" "$1" ;;
+  esac
 }
-build linux   amd64 dd-installer-linux-amd64   ""
-build linux   arm64 dd-installer-linux-arm64   ""
-build darwin  amd64 dd-installer-macos-amd64   ""
-build darwin  arm64 dd-installer-macos-arm64   ""
-build windows amd64 dd-installer-windows-amd64 ".exe"
+
+case "$(uname -s)" in
+  Linux)
+    name=dd-installer-linux-amd64; mkdir -p "dist/stage/$name"
+    CGO_ENABLED=1 go build -trimpath -ldflags "$LDFLAGS" -o "dist/stage/$name/dd-installer" ./cmd/dd-installer
+    pack "$name" "" tgz ;;
+  Darwin)
+    for arch in arm64 amd64; do
+      name="dd-installer-macos-$arch"; mkdir -p "dist/stage/$name"
+      CGO_ENABLED=1 GOARCH=$arch go build -trimpath -ldflags "$LDFLAGS" -o "dist/stage/$name/dd-installer" ./cmd/dd-installer
+      pack "$name" "" tgz
+    done ;;
+  MINGW*|MSYS*|CYGWIN*)
+    name=dd-installer-windows-amd64; mkdir -p "dist/stage/$name"
+    CGO_ENABLED=1 go build -trimpath -ldflags "$LDFLAGS -H=windowsgui" -o "dist/stage/$name/dd-installer.exe" ./cmd/dd-installer
+    pack "$name" "" zip ;;
+  *) echo "unsupported OS $(uname -s)" >&2; exit 1 ;;
+esac
 rm -rf dist/stage
-(cd dist && sha256sum * > SHA256SUMS)
 ls -l dist

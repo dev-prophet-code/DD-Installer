@@ -7,8 +7,8 @@
 package macos
 
 import (
+	"context"
 	"errors"
-	"os/exec"
 
 	"github.com/dev-prophet-code/dd-installer/internal/model"
 	"github.com/dev-prophet-code/dd-installer/internal/platform"
@@ -34,6 +34,8 @@ func (mac) LocalRunner(model.Config) (transport.Runner, error) {
 	return nil, errors.New("local installation is not supported on macOS; use the SSH target")
 }
 
-func (mac) OpenBrowser(url string) error { return exec.Command("open", url).Start() }
+func (mac) ProvisionLocal(context.Context, func(string)) (bool, error) {
+	return false, errors.New("local installation is not supported on macOS")
+}
 
 func (mac) DefaultSSHKeys() []string { return platforms.SSHKeyCandidates() }

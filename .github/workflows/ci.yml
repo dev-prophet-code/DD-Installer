@@ -13,28 +13,19 @@ permissions:
 jobs:
   test:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
+      - name: Linux GUI build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev
       - run: go vet ./...
       - run: go test ./...
       - run: go build ./cmd/dd-installer
-  cross:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.24'
-      - name: Vet macOS code (cross-compiled; no macOS runner needed)
-        run: GOOS=darwin GOARCH=arm64 go vet ./...
-      - run: ./scripts/build.sh
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dd-installer
-          path: dist/

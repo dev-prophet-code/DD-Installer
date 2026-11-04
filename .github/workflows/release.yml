@@ -1,6 +1,8 @@
 name: Release
-# Every push to main builds all programs and refreshes the rolling "latest"
-# pre-release. Pushing a tag like v0.2.0 creates a normal versioned release.
+# Every push to main builds the native app on each OS and refreshes the
+# rolling "latest" pre-release. Pushing a tag like v0.2.0 creates a versioned
+# release. The GUI needs CGO, so every OS builds on its own runner; a slow
+# runner for one OS never blocks the others from being published.
 on:
   push:
     branches: [main]
@@ -13,25 +15,52 @@ concurrency:
   cancel-in-progress: false
 jobs:
   build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            name: linux
+          - os: windows-latest
+            name: windows
+          - os: macos-latest
+            name: macos
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
           go-version: '1.24'
-      - run: sudo apt-get install -y zip
+      - name: Linux GUI build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev zip
       - run: go vet ./... && go test ./...
-      - name: Build all platforms
+      - name: Build
         run: |
           if [ "${GITHUB_REF_TYPE}" = tag ]; then V="${GITHUB_REF_NAME#v}"; else V="0.0.0-main.$(git rev-parse --short HEAD)"; fi
           VERSION="$V" ./scripts/build.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: dd-installer
-          path: dist/
+          name: dd-installer-${{ matrix.name }}
+          path: dist/*
+  publish:
+    needs: build
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dd-installer-*
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: cd dist && ls && sha256sum * > SHA256SUMS
       - name: Publish release (tag)
         if: github.ref_type == 'tag'
         env:
@@ -45,4 +74,4 @@ jobs:
           gh release delete latest --cleanup-tag --yes || true
           gh release create latest dist/* --target "$GITHUB_SHA" --prerelease \
             --title "Latest build (main)" \
-            --notes "Automatic build of the current main branch ($GITHUB_SHA). Draft quality - see the disclaimer in the archive. Verify downloads with SHA256SUMS."
+            --notes "Automatic build of the current main branch ($GITHUB_SHA). Draft quality - read the disclaimer in the archive. Verify downloads with SHA256SUMS. Files missing here belong to an OS runner that did not finish; re-run the workflow."

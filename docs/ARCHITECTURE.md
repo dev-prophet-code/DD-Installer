@@ -1,7 +1,7 @@
 # Architecture
 
 ```
-cmd/dd-installer          main, flags, platform registration (build tags)
+cmd/dd-installer          main, platform registration (build tags)
 internal/model            Config + validation (pure)
 internal/probe            host scan script + parser
 internal/sizing           requirements, RAM estimate, tuning recommendations
@@ -9,7 +9,8 @@ internal/assistant        rule base + diagnosis (problem solver)
 internal/install          step orchestration, scripts, redaction, assistant loop
 internal/transport        Runner: Local shell, SSH (host-key pinning)
 internal/platform         interface implemented per OS
-internal/gui              local web server + embedded UI
+internal/app              UI-independent controller (scan, install, events, confirmations)
+internal/ui               native desktop UI (Fyne): wizard window
 platforms/{linux,macos,windows}   OS-specific implementations
 ```
 
@@ -31,4 +32,12 @@ Running the Console API calls on the target means no extra firewall port has to 
 
 ## Platform layer
 
-`internal/platform.Platform` provides `LocalSupport`, `LocalRunner`, `OpenBrowser`, `DefaultSSHKeys`. Each OS package registers itself from a build-tagged file, so a binary contains only its own OS code.
+`internal/platform.Platform` provides `LocalSupport`, `LocalRunner`, `ProvisionLocal`, `DefaultSSHKeys`. Each OS package registers itself from a build-tagged file, so a binary contains only its own OS code.
+
+## Native UI
+
+`internal/ui` is a Fyne application (real OS windows and widgets, no browser, no embedded web server). It only talks to `internal/app.Controller`, so another front end (CLI, different toolkit) could reuse the whole core. UI updates from background work go through `fyne.Do`. Headless tests use Fyne's test driver.
+
+## Windows: WSL2 provisioning
+
+`LocalSupport` reports `CanProvision` when `wsl.exe` or an Ubuntu distribution is missing. The wizard then offers **Install WSL2 + Ubuntu**: an elevated (UAC) `wsl --install -d Ubuntu --no-launch`, then, as root in the new distribution, a user `dune` with passwordless sudo, `systemd=true` and `default=dune` in `/etc/wsl.conf`, followed by `wsl --terminate`. If Windows needs a restart (exit code 3010, or the distribution is not registered yet) the user is told to reboot and start the installer again; the setup then continues with the installed Ubuntu.

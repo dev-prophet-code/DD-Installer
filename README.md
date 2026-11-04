@@ -1,6 +1,6 @@
 # DD-Installer
 
-A cross-platform **GUI installer for [Dune: Awakening Docker](https://github.com/Red-Blink/dune-awakening-selfhost-docker)** (self-hosted Dune: Awakening dedicated server). One binary per operating system - **Linux, macOS, Windows** - installs the server either on **this computer** or on a **remote Linux server over SSH**.
+A cross-platform **native desktop installer for [Dune: Awakening Docker](https://github.com/Red-Blink/dune-awakening-selfhost-docker)** (self-hosted Dune: Awakening dedicated server). One real application per operating system - **Linux, macOS, Windows** (native window, no web interface, no browser) - installs the server either on **this computer** or on a **remote Linux server over SSH**.
 
 > **Status: first draft (v0.1).** The core logic is implemented and unit-tested; end-to-end runs against real servers still need validation. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
@@ -10,7 +10,7 @@ A cross-platform **GUI installer for [Dune: Awakening Docker](https://github.com
 
 | | |
 |---|---|
-| **Two targets** | Local install (Linux native, Windows via WSL2) or remote install over SSH (key, password or ssh-agent, trust-on-first-use host-key check) |
+| **Two targets** | Local install (Linux native, Windows via WSL2 - **the installer checks for WSL2/Ubuntu, offers to install it and then continues**) or remote install over SSH (key, password or ssh-agent, trust-on-first-use host-key check) |
 | **Sietches** | Choose how many Hagga Basin Sietches to create initially, name each one, and mark each PvE or PvP (PvP/PvE per Sietch is *experimental*) |
 | **Deep Desert** | 1-3 instances; ruleset handling follows upstream rules (see below) |
 | **System scan** | Probes CPU (AVX2), RAM, swap, disk, Docker, sudo, ports, WSL; blocks impossible setups; recommends a layout and tuning (PostgreSQL, RabbitMQ, swap, `.wslconfig`) |
@@ -22,7 +22,7 @@ A cross-platform **GUI installer for [Dune: Awakening Docker](https://github.com
 DD-Installer does not re-implement the server. It drives the **upstream installer** (`bootstrap.sh` / `install.sh`) and the **Dune Docker Console API** on the target, then applies your layout with the upstream CLI/API (`sietches set-active`, `set-display`, `deepdesert layout set`). Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ```
-GUI (browser/app window, 127.0.0.1 only)
+Native window (Fyne) - no web server, no network listener
   -> Go core: validate -> scan -> sizing -> install steps -> assistant
        -> transport: local shell | WSL2 | SSH
             -> target: bootstrap.sh -> install.sh -> Console API (127.0.0.1 on the target)
@@ -54,27 +54,27 @@ Ready-made programs are built automatically by GitHub Actions on every push to `
 |---|---|
 | Windows (x64) | `dd-installer-windows-amd64.zip` |
 | macOS (Apple Silicon / Intel) | `dd-installer-macos-arm64.tar.gz` / `...-amd64.tar.gz` |
-| Linux (x64 / arm64) | `dd-installer-linux-amd64.tar.gz` / `...-arm64.tar.gz` |
+| Linux (x64) | `dd-installer-linux-amd64.tar.gz` |
 
 Verify with `SHA256SUMS`. The binaries are **not code-signed** yet: Windows SmartScreen and macOS Gatekeeper will warn (see the platform folders). To publish a version: `git tag v0.1.0 && git push origin v0.1.0`.
 
 ## Build & run
 
-Requires Go 1.24+. No CGO, so cross-compiling needs no extra toolchains.
+Requires Go 1.24+ and a C compiler (the native GUI uses CGO): Linux `gcc libgl1-mesa-dev xorg-dev`, macOS Xcode command line tools, Windows MinGW-w64. Each OS is built on its own machine (CI does this on GitHub runners).
 
 ```bash
 go test ./...
-./scripts/build.sh            # builds dist/ for all platforms
-go run ./cmd/dd-installer     # opens the GUI in your browser
+./scripts/build.sh            # builds + packages for the OS you are on into dist/
+go run ./cmd/dd-installer     # opens the installer window
 ```
 
-Flags: `--no-browser` (print the URL only), `--version`.
+Flag: `--version`. A desktop session is required (no headless mode).
 
 ## Repository layout
 
 ```
 cmd/dd-installer/    entry point (+ build-tagged platform imports)
-internal/            model, probe, sizing, assistant, install, transport, gui (shared core)
+internal/            model, probe, sizing, assistant, install, transport, app (controller), ui (native Fyne UI)
 platforms/           linux/  macos/  windows/   per-OS code, packaging notes, CI notes
 docs/                architecture, feasibility, sizing, assistant, security, disclaimer, roadmap
 scripts/             build helpers

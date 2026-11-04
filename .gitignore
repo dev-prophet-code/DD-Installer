@@ -3,3 +3,7 @@ dist/
 .env
 *.pem
 id_*
+
+# generated Windows resources (see platforms/windows/winres)
+*.syso
+platforms/windows/winres/winres.json

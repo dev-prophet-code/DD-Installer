@@ -5,7 +5,7 @@
 * Verify the per-Sietch PvP/PvE selectors against a running game; promote from *experimental*.
 * Pin upstream release (`DUNE_RELEASE_SHA256`, tag selection) instead of "latest".
 * SSH keyboard-interactive and jump-host support.
-* Embed the logo as the Windows `.exe` file icon (needs a resource compiler such as go-winres or windres in CI).
+* Verify the Windows `.exe` icon/version resources in the first release that contains them.
 * More design polish: animated sandworm/ornithopter motifs, sound (optional), light theme, high-DPI checks on real machines.
 * Signed installers (MSI, notarised `.app`/dmg, AppImage); Linux arm64 build; per-OS native look polish.
 * Verify WSL2 provisioning (UAC, reboot handling) on real Windows 10/11 machines.

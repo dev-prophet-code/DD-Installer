@@ -39,6 +39,10 @@ jobs:
       - name: Linux GUI build dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev zip
+      - name: Windows exe icon and version info
+        if: runner.os == 'Windows'
+        continue-on-error: true   # without it the exe is still built, just with the default icon
+        run: platforms/windows/winres/make-resources.sh
       - run: go vet ./... && go test ./...
       - name: Build
         run: |

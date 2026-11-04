@@ -26,7 +26,7 @@ platforms/{linux,macos,windows}   OS-specific implementations
 8. **layout** - Sietch count, names (and optional PvE/PvP), Deep Desert layout
 9. **post** - e.g. enable memory-swap
 
-Every step runs through `runScript`, which streams redacted output to the GUI. On failure the **assistant** diagnoses, optionally fixes and the step is retried (max 3 attempts; a rule is applied at most once per run).
+Every step runs through `runScript`, which streams redacted output to the UI. On failure the **assistant** diagnoses, optionally fixes and the step is retried (at most 3 attempts per step; a fix rule is applied once per run, transient rules such as package locks or outages up to 3 times).
 
 Running the Console API calls on the target means no extra firewall port has to be reachable from your computer, and secrets travel only through the SSH channel.
 

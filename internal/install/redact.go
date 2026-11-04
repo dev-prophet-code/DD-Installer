@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// redactor removes secrets from everything shown in the GUI or sent to the
+// redactor removes secrets from everything shown in the UI or sent to the
 // assistant. Besides exact secret values it masks the generated admin
 // password that the upstream installer prints, and common token shapes.
 type redactor struct {

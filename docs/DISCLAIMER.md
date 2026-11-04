@@ -11,8 +11,8 @@ DD-Installer is an **unofficial community tool**. It is not affiliated with, end
 
 ## No warranty, no liability
 
-The software is provided **"as is"**, without warranty of any kind. It installs software (Docker, packages), changes system settings and starts game servers on the machine you choose. You are responsible for backups and for reviewing what it does.
+The software is provided **"as is"**, without warranty of any kind. It installs software (Docker, packages, on Windows also WSL2 and Ubuntu), changes system settings and starts game servers on the machine you choose. You are responsible for backups and for reviewing what it does.
 
 **Neither RedBlink nor Prophet, nor any contributor, can be held liable or held responsible** for any damage, data loss, downtime, security incident, cost or other consequence arising from the use of DD-Installer or Dune Docker, to the extent permitted by law.
 
-The GUI requires you to accept this disclaimer before an installation can start.
+The application requires you to accept this disclaimer before an installation can start.

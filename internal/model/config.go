@@ -1,4 +1,4 @@
-// Package model defines the installation plan the GUI collects and the
+// Package model defines the installation plan the UI collects and the
 // installer executes. It is pure data plus validation: no I/O.
 package model
 

@@ -19,7 +19,7 @@ import (
 	"github.com/dev-prophet-code/dd-installer/internal/transport"
 )
 
-// Event is streamed to the GUI.
+// Event is streamed to the UI.
 type Event struct {
 	Type string `json:"type"` // step | log | diagnosis | fix | confirm | done | error
 	Step string `json:"step,omitempty"`
@@ -274,7 +274,7 @@ func sshUser(cfg model.Config, h probe.Info) string {
 }
 
 // runScript executes script on the runner, streaming redacted lines to the
-// GUI and returning the redacted output.
+// UI and returning the redacted output.
 func runScript(ctx context.Context, o Options, red *redactor, script string) (int, string, error) {
 	var mu sync.Mutex
 	var all bytes.Buffer

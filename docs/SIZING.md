@@ -2,11 +2,11 @@
 
 ## Hard requirements (block installation)
 
-x86-64 Linux, AVX2, >= 20 GB RAM, regular (non-root) user, free required ports (31982, 31983, 15432).
+x86-64 Linux, AVX2, >= 20 GB RAM, regular (non-root) user.
 
 ## Warnings
 
-Layout needs more RAM than available; < 200 GB free; < 4 CPU threads; no passwordless sudo; WSL2 without systemd; missing curl/tar (installed automatically).
+Layout needs more RAM than available; < 200 GB free; < 4 CPU threads; no passwordless sudo; WSL2 without systemd; ports 31982/31983/15432 or the web console port already in use (expected when Dune Docker is already installed, so a re-run is possible); missing curl/tar (installed automatically).
 
 ## RAM estimate (heuristic)
 

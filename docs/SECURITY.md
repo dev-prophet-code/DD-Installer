@@ -10,7 +10,7 @@
 
 Report vulnerabilities privately via GitHub security advisories.
 
-## Review & penetration-test log (v0.1 draft)
+## Review & penetration-test log (0.0.1 - 0.0.2 alpha)
 
 Self-conducted review and active tests; fixed before release of the draft:
 
@@ -25,7 +25,7 @@ Self-conducted review and active tests; fixed before release of the draft:
 | Over-broad `tls` pattern could misfire | Tightened |
 | Runner leaked after SSH reconnect | `install.Run` owns and closes the runner |
 
-The v0.1 web GUI was removed in v0.2 (native UI); its checks (token, Host/Origin, CSRF, CSP, traversal) are obsolete because nothing listens on the network any more. The disclaimer gate is enforced in `app.Controller.Start` and tested in `internal/ui`.
+The temporary web GUI of 0.0.1-alpha was removed in 0.0.2-alpha (native UI); its checks (token, Host/Origin, CSRF, CSP, traversal) are obsolete because nothing listens on the network any more. The disclaimer gate is enforced in `app.Controller.Start` and tested in `internal/ui`.
 
 Known limitations: SSH keyboard-interactive auth is not supported; Windows `wsl.exe --exec` quoting is untested on real hardware; the upstream installer is fetched from `main` (not pinned).
 

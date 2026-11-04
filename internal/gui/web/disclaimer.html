@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Disclaimer - Dune Docker Installer</title><link rel="stylesheet" href="style.css"></head>
+<body><main><div class="panel">
+<h2>Disclaimer</h2>
+<p>The Dune Docker Installer ("DD-Installer") is an <b>unofficial community tool</b>. It is not affiliated with, endorsed by or supported by Funcom, nor by RedBlink, the author of "Dune: Awakening Docker" (Red-Blink/dune-awakening-selfhost-docker).</p>
+<h3>Credentials</h3>
+<ul>
+<li>DD-Installer does <b>not store credentials</b> on your computer: SSH passwords, key passphrases and the Funcom token are held in memory for the running session only and are never written to disk, logs or configuration files by this tool, and never sent to anyone but the server you chose.</li>
+<li>Neither RedBlink nor Prophet (author of DD-Installer) receives, collects or stores your credentials.</li>
+<li>Be aware that the <i>installed</i> Dune Docker software itself stores the Funcom token and the generated admin password in files on <i>your</i> server (runtime/secrets/). That is upstream behaviour you control.</li>
+<li>If you let the assistant enable temporary passwordless sudo, it is removed again at the end of the run; if the installer is killed earlier, remove /etc/sudoers.d/90-dd-installer manually.</li>
+</ul>
+<h3>No warranty, no liability</h3>
+<p>The software is provided "as is", without warranty of any kind. It changes system settings, installs software (Docker, packages) and starts game servers on the machine you select. You are responsible for backups and for checking the commands and settings before you run them. <b>Neither RedBlink nor Prophet, nor any contributor, can be held liable or responsible</b> for any damage, data loss, downtime, security incidents, costs or other consequences arising from the use of DD-Installer or of Dune Docker, to the extent permitted by law.</p>
+<p><a href="/">Back</a></p>
+</div></main></body></html>

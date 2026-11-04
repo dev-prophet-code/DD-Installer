@@ -5,6 +5,7 @@
 * Verify the per-Sietch PvP/PvE selectors against a running game; promote from *experimental*.
 * Pin upstream release (`DUNE_RELEASE_SHA256`, tag selection) instead of "latest".
 * SSH keyboard-interactive and jump-host support.
+* More design polish: animated sandworm/ornithopter motifs, sound (optional), light theme, high-DPI checks on real machines.
 * Signed installers (MSI, notarised `.app`/dmg, AppImage); Linux arm64 build; per-OS native look polish.
 * Verify WSL2 provisioning (UAC, reboot handling) on real Windows 10/11 machines.
 * Resume-after-failure state, import of an existing install, Linux distro matrix in CI.

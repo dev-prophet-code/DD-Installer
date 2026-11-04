@@ -6,6 +6,7 @@ DD-Installer is an **unofficial community tool**. It is not affiliated with, end
 
 * DD-Installer **does not store credentials**. SSH passwords, key passphrases and the Funcom token are held in memory for the running session only. They are never written to disk, log files or configuration files by this tool and are sent only to the server you selected.
 * **Neither RedBlink nor Prophet** (author of DD-Installer) receives, collects or stores your credentials.
+* The optional **Create SSH key** helper writes a new key pair into your own `~/.ssh` folder, but only when you click it (private key with owner-only permissions; existing keys are never overwritten). It is your key, stored only there and never sent anywhere.
 * The *installed* Dune Docker software stores the Funcom token and the generated admin password in files on your own server (`runtime/secrets/`). That is upstream behaviour under your control.
 * If you approve the assistant's *temporary passwordless sudo* fix, it is removed again when the run ends. If the installer is killed earlier, delete `/etc/sudoers.d/90-dd-installer` manually.
 

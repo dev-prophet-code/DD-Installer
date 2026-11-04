@@ -21,7 +21,7 @@ import (
 )
 
 // Version is set at build time.
-var Version = "0.0.2-alpha" // overridden at build time from the VERSION file
+var Version = "0.0.3-alpha" // overridden at build time from the VERSION file
 
 // Request is everything the user entered, including secrets.
 type Request struct {

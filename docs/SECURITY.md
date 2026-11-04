@@ -29,6 +29,10 @@ The temporary web GUI of 0.0.1-alpha was removed in 0.0.2-alpha (native UI); its
 
 Known limitations: SSH keyboard-interactive auth is not supported; Windows `wsl.exe --exec` quoting is untested on real hardware; the upstream installer is fetched from `main` (not pinned).
 
+## SSH key helper
+
+The only credential the installer can write to disk, and only on an explicit click: an Ed25519 key pair in `~/.ssh` (private key mode 0600, directory 0700). Existing files are never overwritten (exclusive create), names are validated against path traversal, an optional passphrase encrypts the key. A half-created pair is removed on error. The passphrase is kept only in memory.
+
 ## WSL2 provisioning (Windows)
 
 The user created in a fresh Ubuntu gets passwordless sudo (the installer runs unattended inside a dedicated distribution). Elevation uses the standard Windows UAC prompt; the installer itself never runs elevated. The consent dialog states what will be installed.

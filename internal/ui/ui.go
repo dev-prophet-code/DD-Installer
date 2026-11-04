@@ -5,14 +5,17 @@ package ui
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 
 	"fyne.io/fyne/v2"
 	fyneapp "fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/dev-prophet-code/dd-installer/internal/app"
@@ -46,7 +49,9 @@ type wizard struct {
 	pf  platform.Platform
 	cur int
 
-	nav      *widget.Label
+	steps    *stepBar
+	fx       *flasher
+	mote     *motes
 	pages    []fyne.CanvasObject
 	holder   *fyne.Container
 	errLabel *widget.Label
@@ -98,6 +103,8 @@ type wizard struct {
 // Run opens the installer window and blocks until it is closed.
 func Run(c *app.Controller) {
 	a := fyneapp.NewWithID("io.github.dev-prophet-code.dd-installer")
+	a.Settings().SetTheme(duneTheme{})
+	a.SetIcon(appIcon())
 	w, _ := newWizard(a, c)
 	w.ShowAndRun()
 }
@@ -107,7 +114,7 @@ func newWizard(a fyne.App, c *app.Controller) (fyne.Window, *wizard) {
 	w := a.NewWindow("Dune Docker Installer " + app.Version)
 	wz := &wizard{c: c, a: a, w: w, pf: c.Platform(), stepLbls: map[string]*widget.Label{}}
 	wz.build()
-	w.Resize(fyne.NewSize(940, 760))
+	w.Resize(fyne.NewSize(1020, 820))
 	w.SetContent(wz.layout())
 	w.SetOnClosed(func() {
 		if wz.unsub != nil {
@@ -121,26 +128,39 @@ func newWizard(a fyne.App, c *app.Controller) (fyne.Window, *wizard) {
 }
 
 func (z *wizard) layout() fyne.CanvasObject {
-	title := widget.NewLabelWithStyle("Dune Docker Installer", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	ver := widget.NewLabel("v" + app.Version + " - " + z.pf.DisplayName())
+	// backdrop and drifting sand
+	bg := canvas.NewImageFromImage(renderBackdrop(1240, 1000))
+	bg.FillMode = canvas.ImageFillStretch
+	z.mote = newMotes(46)
+	z.mote.start()
+	z.fx = newFlasher()
+
+	// header
+	title := heading("DUNE DOCKER INSTALLER", 30)
+	pulse(title, colSpice, colGold)
+	sub := caption(spaced("Arrakis server setup")+"   \u25C6   v"+app.Version+"   \u25C6   "+z.pf.DisplayName(), colSandDim, 13)
 	disc := widget.NewLabel(app.DisclaimerShort)
 	disc.Wrapping = fyne.TextWrapWord
-	more := widget.NewButton("Full disclaimer", z.showDisclaimer)
-	banner := widget.NewCard("", "", container.NewBorder(nil, nil, nil, more, disc))
-	z.nav = widget.NewLabel("")
-	top := container.NewVBox(container.NewHBox(title, ver), banner, z.nav, widget.NewSeparator())
+	more := widget.NewButton("Disclaimer", z.showDisclaimer)
+	banner := panel(container.NewBorder(nil, nil, nil, more, disc))
+	z.steps = newStepBar(stepNames)
+	top := container.NewVBox(container.NewPadded(container.NewVBox(title, sub)), newShimmer(), banner, container.NewPadded(z.steps.box))
+
 	z.errLabel = widget.NewLabel("")
 	z.errLabel.Wrapping = fyne.TextWrapWord
 	z.errLabel.Importance = widget.DangerImportance
-	z.back = widget.NewButton("Back", func() { z.show(z.cur - 1) })
-	z.next = widget.NewButton("Next", z.onNext)
+	z.back = widget.NewButtonWithIcon("Back", theme.NavigateBackIcon(), func() { z.show(z.cur - 1) })
+	z.next = widget.NewButtonWithIcon("Next", theme.NavigateNextIcon(), z.onNext)
+	z.next.IconPlacement = widget.ButtonIconTrailingText
 	z.next.Importance = widget.HighImportance
-	bottom := container.NewVBox(widget.NewSeparator(), z.errLabel, container.NewHBox(z.back, layout.NewSpacer(), z.next))
+	bottom := panel(container.NewVBox(z.errLabel, container.NewHBox(z.back, layout.NewSpacer(), z.next)))
+
 	z.holder = container.NewStack()
 	for _, p := range z.pages {
 		z.holder.Add(p)
 	}
-	return container.NewBorder(top, bottom, nil, nil, z.holder)
+	main := container.NewBorder(top, bottom, nil, nil, panel(z.holder))
+	return container.NewStack(bg, z.mote.box, container.NewPadded(main), z.fx.rect)
 }
 
 func (z *wizard) showDisclaimer() {
@@ -197,14 +217,16 @@ func (z *wizard) pageTarget() fyne.CanvasObject {
 	z.sshForm = widget.NewForm(
 		widget.NewFormItem("Host", z.host), widget.NewFormItem("Port", z.port), widget.NewFormItem("User", z.user),
 		widget.NewFormItem("Authentication", z.auth), z.keyRow, z.phraseRow, z.passRow)
-	z.sshBox = container.NewVBox(z.sshForm)
+	helpBtn := widget.NewButtonWithIcon("SSH help", theme.HelpIcon(), z.showSSHHelp)
+	keyBtn := widget.NewButtonWithIcon("Create SSH key", theme.ContentAddIcon(), z.showKeyCreator)
+	z.sshBox = container.NewVBox(z.sshForm, container.NewHBox(keyBtn, helpBtn))
 	z.installDir = widget.NewEntry()
 	z.installDir.SetPlaceHolder("blank = ~/dune-awakening-selfhost-docker")
 
 	z.updateAuth()
 	z.target.SetSelected(optSSH)
 	return container.NewVScroll(container.NewVBox(
-		widget.NewLabelWithStyle("1. Where should Dune Docker be installed?", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		heading("Where should it be installed?", 24),
 		z.target, z.localInfo, z.provisionBtn, z.wslRow, z.sshBox,
 		widget.NewForm(widget.NewFormItem("Install folder", z.installDir)),
 	))
@@ -320,7 +342,7 @@ func (z *wizard) pageServer() fyne.CanvasObject {
 	tokNote := widget.NewLabel("The token is kept in memory only and sent through the encrypted channel to your server.")
 	tokNote.Wrapping = fyne.TextWrapWord
 	return container.NewVScroll(container.NewVBox(
-		widget.NewLabelWithStyle("2. Server", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		heading("Your server", 24),
 		widget.NewForm(
 			widget.NewFormItem("Server title", z.title),
 			widget.NewFormItem("Region", z.region),
@@ -348,11 +370,11 @@ func (z *wizard) pageLayout() fyne.CanvasObject {
 	z.ramLabel.Importance = widget.WarningImportance
 	z.addSietch("Sietch 1", "PVE")
 	return container.NewVScroll(container.NewVBox(
-		widget.NewLabelWithStyle("3. Sietches & Deep Desert", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		widget.NewLabelWithStyle("Hagga Basin Sietches (name + ruleset)", fyne.TextAlignLeading, fyne.TextStyle{Italic: true}),
+		heading("Sietches & Deep Desert", 24),
+		caption(spaced("Hagga Basin sietches - name and ruleset"), colSpice, 13),
 		z.rowsBox, add, z.combat,
 		widget.NewSeparator(),
-		widget.NewLabelWithStyle("Deep Desert", fyne.TextAlignLeading, fyne.TextStyle{Italic: true}),
+		caption(spaced("Deep Desert"), colSpice, 13),
 		widget.NewForm(widget.NewFormItem("Instances", z.dd)), z.ddRow, note, z.ramLabel))
 }
 
@@ -422,12 +444,12 @@ func (z *wizard) pageScan() fyne.CanvasObject {
 	z.tuning = widget.NewCheck("Apply recommended tuning (PostgreSQL, RabbitMQ, swap)", func(bool) {})
 	z.tuning.SetChecked(true)
 	return container.NewVScroll(container.NewVBox(
-		widget.NewLabelWithStyle("4. Scan & optimise", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		heading("Scan the target", 24),
 		z.scanBtn, z.scanOut, z.tuning))
 }
 
 func (z *wizard) onScan() {
-	z.errLabel.SetText("")
+	z.setErr("")
 	z.scanBtn.Disable()
 	z.scanOut.Objects = []fyne.CanvasObject{widget.NewLabel("Scanning...")}
 	z.scanOut.Refresh()
@@ -515,7 +537,7 @@ func firstNonEmpty(a ...string) string {
 func (z *wizard) pageInstall() fyne.CanvasObject {
 	z.summary = widget.NewLabel("")
 	z.summary.Wrapping = fyne.TextWrapWord
-	z.accept = widget.NewCheck("I have read and accept the disclaimer: use at my own risk, no credentials are stored by this tool, and neither RedBlink nor Prophet can be held liable.", func(bool) { z.updateInstallBtn() })
+	z.accept = widget.NewCheck("I accept the disclaimer (own risk, no credentials stored, no liability)", func(bool) { z.updateInstallBtn() })
 	z.install = widget.NewButton("Install now", z.onInstall)
 	z.install.Importance = widget.HighImportance
 	z.install.Disable()
@@ -527,7 +549,7 @@ func (z *wizard) pageInstall() fyne.CanvasObject {
 	z.logEntry.Wrapping = fyne.TextWrapBreak
 	z.logEntry.SetMinRowsVisible(14)
 	return container.NewVScroll(container.NewVBox(
-		widget.NewLabelWithStyle("5. Install", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		heading("Begin the installation", 24),
 		z.summary, z.accept, container.NewHBox(z.install, z.cancel), z.progress, z.assist, z.logEntry))
 }
 
@@ -562,19 +584,20 @@ func (z *wizard) updateSummary() {
 }
 
 func (z *wizard) onInstall() {
-	z.errLabel.SetText("")
+	z.setErr("")
 	z.progress.Objects = nil
 	z.assist.Objects = nil
 	z.stepLbls = map[string]*widget.Label{}
 	z.logEntry.SetText("")
 	z.logLines = nil
 	if err := z.c.Start(z.request()); err != nil {
-		z.errLabel.SetText(err.Error())
+		z.setErr(err.Error())
 		return
 	}
 	z.install.Disable()
 	z.back.Disable()
 	z.cancel.Show()
+	z.mote.setStorm(true)
 	if z.unsub != nil {
 		z.unsub()
 	}
@@ -612,7 +635,7 @@ func (z *wizard) onEvent(e install.Event) {
 		z.askFix(e.ConfirmID, d)
 	case "error":
 		z.finish()
-		z.errLabel.SetText(e.Msg)
+		z.setErr(e.Msg)
 	case "done":
 		z.finish()
 		dialog.ShowInformation("Installation finished",
@@ -620,7 +643,18 @@ func (z *wizard) onEvent(e install.Event) {
 	}
 }
 
+// setErr shows an error message, or hides the line when it is empty.
+func (z *wizard) setErr(msg string) {
+	z.errLabel.SetText(msg)
+	if msg == "" {
+		z.errLabel.Hide()
+	} else {
+		z.errLabel.Show()
+	}
+}
+
 func (z *wizard) finish() {
+	z.mote.setStorm(false)
 	z.cancel.Hide()
 	z.back.Enable()
 	z.updateInstallBtn()
@@ -644,6 +678,9 @@ func (z *wizard) diagCard(d assistant.Diagnosis) fyne.CanvasObject {
 		l := widget.NewLabel("- " + a.Description)
 		l.Wrapping = fyne.TextWrapWord
 		items = append(items, l)
+	}
+	if u, err := url.Parse(d.DocURL); err == nil && d.DocURL != "" {
+		items = append(items, widget.NewHyperlink("Open the documentation", u))
 	}
 	return widget.NewCard(d.Title, "Fix type: "+string(d.Risk), container.NewVBox(items...))
 }
@@ -719,16 +756,12 @@ func (z *wizard) show(n int) {
 			p.Hide()
 		}
 	}
-	var parts []string
-	for i, s := range stepNames {
-		if i == n {
-			parts = append(parts, fmt.Sprintf("[ %d. %s ]", i+1, s))
-		} else {
-			parts = append(parts, fmt.Sprintf("%d. %s", i+1, s))
-		}
+	z.holder.Refresh() // re-run the stack layout so the newly shown page gets its size
+	z.steps.set(n)
+	if z.fx != nil {
+		z.fx.flash()
 	}
-	z.nav.SetText(strings.Join(parts, "   >   "))
-	z.errLabel.SetText("")
+	z.setErr("")
 	z.back.Disable()
 	if n > 0 && !z.c.Running() {
 		z.back.Enable()
@@ -762,7 +795,7 @@ func (z *wizard) onNext() {
 		errs = append(errs, "A local install is not possible on this computer yet: "+z.pf.LocalSupport().Reason)
 	}
 	if len(errs) > 0 {
-		z.errLabel.SetText(strings.Join(errs, "\n"))
+		z.setErr(strings.Join(errs, "\n"))
 		return
 	}
 	z.show(z.cur + 1)

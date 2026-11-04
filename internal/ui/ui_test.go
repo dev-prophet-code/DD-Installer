@@ -12,6 +12,7 @@ import (
 	"github.com/dev-prophet-code/dd-installer/internal/install"
 	"github.com/dev-prophet-code/dd-installer/internal/model"
 	"github.com/dev-prophet-code/dd-installer/internal/platform"
+	"github.com/dev-prophet-code/dd-installer/internal/sshkey"
 	"github.com/dev-prophet-code/dd-installer/internal/transport"
 )
 
@@ -179,5 +180,39 @@ func TestMacOSHasNoLocalOption(t *testing.T) {
 	z.onNext()
 	if z.cur != 0 {
 		t.Fatal("local must be blocked on macOS")
+	}
+}
+
+// onEvent2 feeds a realistic event sequence (used by the screenshot helper).
+func (z *wizard) onEvent2() {
+	z.onEvent(install.Event{Type: "step", Step: "bootstrap", Status: "ok", Msg: "Download Dune Docker"})
+	z.onEvent(install.Event{Type: "step", Step: "install", Status: "running", Msg: "Install Docker & start the Web UI"})
+	d := assistant.Diagnosis{RuleID: "x", Title: "Port already in use", Explain: "Another service uses the chosen web port.", Risk: assistant.RiskSafe, Actions: []assistant.Action{{Description: "Use the next free Web UI port and retry."}}}
+	z.onEvent(install.Event{Type: "diagnosis", Diagnosis: &d})
+	z.onEvent(install.Event{Type: "log", Msg: "==> Choosing the Web UI port."})
+}
+
+func TestSSHHelpAndKeyDialogsBuild(t *testing.T) {
+	z := newTest(t, &fakePF{id: "linux", ls: platform.LocalSupport{Supported: true}})
+	z.host.SetText("1.2.3.4")
+	z.user.SetText("dune")
+	z.showSSHHelp()
+	z.showKeyCreator()
+	z.showKeyCreated(sshkey.Result{PrivatePath: "/x/.ssh/k", PublicKey: "ssh-ed25519 AAAA c", Fingerprint: "SHA256:x"})
+	// the creator must not leak a passphrase into the field of another auth mode
+	if z.pass.Text != "" {
+		t.Fatal("password field must stay empty")
+	}
+}
+
+func TestErrorLineHiddenWhenEmpty(t *testing.T) {
+	z := newTest(t, &fakePF{id: "linux", ls: platform.LocalSupport{Supported: true}})
+	z.setErr("boom")
+	if !z.errLabel.Visible() {
+		t.Fatal("error must be visible")
+	}
+	z.setErr("")
+	if z.errLabel.Visible() {
+		t.Fatal("empty error line must be hidden")
 	}
 }

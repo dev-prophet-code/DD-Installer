@@ -47,3 +47,20 @@ func TestSecretsNotSerialised(t *testing.T) {
 		}
 	}
 }
+
+func TestConsoleAllowFrom(t *testing.T) {
+	for _, ok := range []string{"", "203.0.113.7", "203.0.113.0/24", "2001:db8::/32"} {
+		c := Default()
+		c.ConsoleAllowFrom = ok
+		if len(c.Validate()) != 0 {
+			t.Errorf("%q should be valid", ok)
+		}
+	}
+	for _, bad := range []string{"anywhere", "1.2.3", "1.2.3.4/99", "1.2.3.4; rm -rf /", "$(id)"} {
+		c := Default()
+		c.ConsoleAllowFrom = bad
+		if len(c.Validate()) == 0 {
+			t.Errorf("%q must be rejected", bad)
+		}
+	}
+}

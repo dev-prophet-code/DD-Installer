@@ -13,6 +13,7 @@ import (
 
 	"github.com/dev-prophet-code/dd-installer/internal/assistant"
 	"github.com/dev-prophet-code/dd-installer/internal/install"
+	"github.com/dev-prophet-code/dd-installer/internal/manage"
 	"github.com/dev-prophet-code/dd-installer/internal/model"
 	"github.com/dev-prophet-code/dd-installer/internal/platform"
 	"github.com/dev-prophet-code/dd-installer/internal/probe"
@@ -313,4 +314,44 @@ func (c *Controller) Cancel() {
 		c.cancel()
 	}
 	c.mu.Unlock()
+}
+
+// RunAction performs one management action (see package manage) on the
+// selected target and streams its output to log. Destructive actions need
+// their confirmation phrase typed exactly. It refuses to run while an
+// installation or another action is in progress.
+func (c *Controller) RunAction(ctx context.Context, r Request, id, phrase string, log func(string)) (int, error) {
+	a, ok := manage.ByID(id)
+	if !ok {
+		return -1, errors.New("unknown action")
+	}
+	if a.Risk == manage.Destructive && strings.TrimSpace(phrase) != a.Phrase {
+		return -1, fmt.Errorf("type %q to confirm this action", a.Phrase)
+	}
+	cfg := r.Cfg()
+	for _, e := range cfg.Validate() {
+		for _, p := range []string{"ssh:", "target", "installDir", "wslDistro"} {
+			if strings.HasPrefix(e, p) {
+				return -1, errors.New(e)
+			}
+		}
+	}
+	c.mu.Lock()
+	if c.running {
+		c.mu.Unlock()
+		return -1, errors.New("another operation is already running")
+	}
+	c.running = true
+	c.mu.Unlock()
+	defer func() { c.mu.Lock(); c.running = false; c.mu.Unlock() }()
+
+	if c.pf != nil {
+		defer c.pf.PreventSleep()()
+	}
+	run, err := c.connect(ctx, cfg)
+	if err != nil {
+		return -1, errors.New(Sanitize(err.Error(), cfg))
+	}
+	defer run.Close()
+	return install.StreamScript(ctx, run, a.Script(cfg), log, cfg.SSH.Password, cfg.SSH.Passphrase, cfg.FuncomToken)
 }

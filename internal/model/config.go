@@ -4,6 +4,7 @@ package model
 
 import (
 	"fmt"
+	"net"
 	"regexp"
 	"slices"
 	"strings"
@@ -76,6 +77,12 @@ type Config struct {
 	FuncomToken string     `json:"-"` // never stored on the client
 	Sietches    []Sietch   `json:"sietches"`
 	DeepDesert  DeepDesert `json:"deepDesert"`
+	// ConfigureFirewall adds allow rules to an active ufw/firewalld on the
+	// target (never enables or resets a firewall).
+	ConfigureFirewall bool `json:"configureFirewall"`
+	// ConsoleAllowFrom restricts the web console port to this IP/CIDR
+	// (empty = open to everyone).
+	ConsoleAllowFrom string `json:"consoleAllowFrom,omitempty"`
 	// UpstreamLatest installs the newest upstream release instead of the
 	// version DD-Installer was tested with (may be incompatible).
 	UpstreamLatest bool `json:"upstreamLatest"`
@@ -144,6 +151,11 @@ func (c *Config) Validate() []string {
 		add("target must be %q or %q", TargetLocal, TargetSSH)
 	}
 
+	if f := strings.TrimSpace(c.ConsoleAllowFrom); f != "" {
+		if _, _, err := net.ParseCIDR(f); err != nil && net.ParseIP(f) == nil {
+			add("consoleAllowFrom must be an IP address or CIDR such as 203.0.113.7 or 203.0.113.0/24")
+		}
+	}
 	if c.WSLDistro != "" && !distroRe.MatchString(c.WSLDistro) {
 		add("wslDistro contains invalid characters")
 	}

@@ -28,7 +28,7 @@ func detachStartScript(id, script string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "D=\"%s\"\n", detachDir(id))
 	b.WriteString(`mkdir -p "$D" && chmod 700 "$D"
-if [ -f "$D/pid" ] && kill -0 "$(cat "$D/pid")" 2>/dev/null; then
+if [ -f "$D/pid" ] && [ ! -f "$D/exit" ] && kill -0 "$(cat "$D/pid")" 2>/dev/null; then
   echo "DD_DETACH already-running"
   exit 0
 fi
@@ -37,7 +37,7 @@ rm -f "$D/exit"; : > "$D/log"
 	b.WriteString(heredoc("\"$D/step.sh\"", script))
 	b.WriteString(`chmod 700 "$D/step.sh"
 S=""; command -v setsid >/dev/null 2>&1 && S=setsid
-( $S nohup sh -c 'sh "$1" > "$2" 2>&1 < /dev/null; echo $? > "$3"' sh "$D/step.sh" "$D/log" "$D/exit" > /dev/null 2>&1 &
+( [ -z "$S" ] && set -m; $S nohup sh -c 'sh "$1" > "$2" 2>&1 < /dev/null; echo $? > "$3"' sh "$D/step.sh" "$D/log" "$D/exit" > /dev/null 2>&1 &
   echo $! > "$D/pid" )
 echo "DD_DETACH started"
 `)
@@ -58,7 +58,12 @@ tail -c +%d "$D/log" 2>/dev/null | head -c $((sz - %d)) 2>/dev/null
 
 func detachKillScript(id string) string {
 	return fmt.Sprintf(`D="%s"
-if [ -f "$D/pid" ]; then P=$(cat "$D/pid"); kill -TERM -- "-$P" 2>/dev/null || kill -TERM "$P" 2>/dev/null || true; fi
+if [ -f "$D/pid" ]; then
+  P=$(cat "$D/pid")
+  # the job leads its own process group (setsid): stop the whole group; dash needs "-s TERM --"
+  kill -s TERM -- "-$P" 2>/dev/null || kill -s TERM "$P" 2>/dev/null || true
+  command -v pkill >/dev/null 2>&1 && pkill -TERM -P "$P" 2>/dev/null || true
+fi
 `, detachDir(id))
 }
 

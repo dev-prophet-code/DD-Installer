@@ -45,11 +45,15 @@ echo "DD_DETACH started"
 }
 
 func detachPollScript(id string, offset int) string {
+	// The state is read BEFORE the size. If the job has finished, everything it
+	// wrote is already in the log, so the size below covers all of it; if it is
+	// still running, the next poll picks up the rest. (Reading the size first
+	// could report "exited" together with a stale size and drop the last lines.)
 	return fmt.Sprintf(`D="%s"
-sz=$(wc -c < "$D/log" 2>/dev/null || echo 0)
 st=running
 if [ -f "$D/exit" ]; then st="exit:$(cat "$D/exit")"
 elif ! { [ -f "$D/pid" ] && kill -0 "$(cat "$D/pid")" 2>/dev/null; }; then st=gone; fi
+sz=$(wc -c < "$D/log" 2>/dev/null || echo 0)
 echo "DD_STATE $st"
 echo DD_BODY
 tail -c +%d "$D/log" 2>/dev/null | head -c $((sz - %d)) 2>/dev/null

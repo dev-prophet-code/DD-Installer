@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -18,8 +19,17 @@ import (
 	"github.com/dev-prophet-code/dd-installer/internal/transport"
 )
 
+// unixOnly skips tests that run generated POSIX shell scripts (Linux/macOS hosts).
+func unixOnly(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("runs POSIX shell scripts; not applicable on Windows hosts")
+	}
+}
+
 func runSh(t *testing.T, script string, env ...string) (string, error) {
 	t.Helper()
+	unixOnly(t)
 	cmd := exec.Command("sh", "-c", `eval "$(cat)"`)
 	cmd.Stdin = strings.NewReader(script)
 	cmd.Env = append(os.Environ(), env...)
@@ -30,6 +40,7 @@ func runSh(t *testing.T, script string, env ...string) (string, error) {
 // fakeBin creates stub programs (sudo, visudo, ...) that only record their use.
 func fakeBin(t *testing.T, names ...string) (dir, log string) {
 	t.Helper()
+	unixOnly(t)
 	dir = filepath.Join(t.TempDir(), "bin")
 	log = filepath.Join(t.TempDir(), "calls.log")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -204,6 +215,7 @@ func TestRunLocksSudoRightAfterVerification(t *testing.T) {
 // The helper talks to the local console. An http_proxy from the environment
 // must NOT receive the request (it would carry the admin password and token).
 func TestConsoleHelperBypassesEnvironmentProxy(t *testing.T) {
+	unixOnly(t)
 	py, err := exec.LookPath("python3")
 	if err != nil {
 		if py, err = exec.LookPath("python"); err != nil {
@@ -238,6 +250,7 @@ func TestConsoleHelperBypassesEnvironmentProxy(t *testing.T) {
 
 // The job folder holds the full log, including the generated admin password.
 func TestDetachedJobFolderIsDeletedWhenFinished(t *testing.T) {
+	unixOnly(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	o := &Options{Runner: &transport.Local{Cmd: transport.ShellArgs}, Emit: func(Event) {},

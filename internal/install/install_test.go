@@ -142,6 +142,11 @@ func okAll(key string, _ int) (string, int) {
 	return "ok\n", 0
 }
 
+// testManifest is the checksum list the tests pretend to have downloaded.
+func testManifest() Manifest {
+	return Manifest{Schema: 1, Tested: BuiltinPin(), Latest: BuiltinPin()}
+}
+
 func baseOpts(r *fakeRunner, evs *[]Event) Options {
 	cfg := model.Default()
 	cfg.FuncomToken = "TOPSECRETTOKEN123"
@@ -149,9 +154,10 @@ func baseOpts(r *fakeRunner, evs *[]Event) Options {
 	cfg.DeepDesert = model.DeepDesert{Instances: 3, ThirdRole: model.PvP}
 	return Options{
 		Cfg: cfg, Runner: r, Host: probe.Info{User: "dune"},
-		Report: sizing.Report{Env: map[string]string{"DUNE_PG_JIT": "off", "DUNE_RMQ_ERL_ARGS": "+S 2:2"}, PostCommands: []string{"runtime/scripts/dune memory-swap enable"}},
-		Emit:   func(e Event) { *evs = append(*evs, e) },
-		Sleep:  func(time.Duration) {},
+		Report:   sizing.Report{Env: map[string]string{"DUNE_PG_JIT": "off", "DUNE_RMQ_ERL_ARGS": "+S 2:2"}, PostCommands: []string{"runtime/scripts/dune memory-swap enable"}},
+		Emit:     func(e Event) { *evs = append(*evs, e) },
+		Sleep:    func(time.Duration) {},
+		Upstream: func(context.Context) (Manifest, error) { return testManifest(), nil },
 	}
 }
 
@@ -185,16 +191,26 @@ func TestHappyPath(t *testing.T) {
 	}
 }
 
-func TestLatestUpstreamUsesBootstrap(t *testing.T) {
+func TestLatestUsesTheVerifiedNewestRelease(t *testing.T) {
 	var evs []Event
 	r := &fakeRunner{respond: func(k string, n int) (string, int) { return okAll(k, n) }}
 	o := baseOpts(r, &evs)
 	o.Cfg.UpstreamLatest = true
+	newest := Pin{Tag: "v9.9.9", TreeSHA256: strings.Repeat("ab", 32)}
+	o.Upstream = func(context.Context) (Manifest, error) {
+		m := testManifest()
+		m.Latest = newest
+		return m, nil
+	}
 	if err := Run(context.Background(), o); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(strings.Join(r.calls, "\n"), "DUNE_BOOTSTRAP_SKIP_INSTALL=1") {
-		t.Fatal("latest mode must use upstream bootstrap.sh")
+	all := strings.Join(r.calls, "\n")
+	if !strings.Contains(all, "TAG='v9.9.9'") || !strings.Contains(all, "EXPECTED='"+newest.TreeSHA256+"'") {
+		t.Fatal("latest mode must install the newest listed release with ITS checksum")
+	}
+	if strings.Contains(all, "DUNE_BOOTSTRAP_SKIP_INSTALL") || strings.Contains(all, "| sh") {
+		t.Fatal("no unverified remote script may be piped into a shell any more")
 	}
 }
 
@@ -400,10 +416,7 @@ func TestSecretsRedactedAndFixOnce(t *testing.T) {
 func TestScriptsQuoteSafely(t *testing.T) {
 	cfg := model.Default()
 	cfg.InstallDir = "~/my dune"
-	if !strings.Contains(bootstrapScript(cfg, false), `DIR="$HOME/my dune"`) {
-		t.Fatal("dir expr")
-	}
-	if !strings.Contains(pinnedBootstrapScript(cfg), `DIR="$HOME/my dune"`) {
+	if !strings.Contains(pinnedBootstrapScript(cfg, BuiltinPin()), `DIR="$HOME/my dune"`) {
 		t.Fatal("pinned dir expr")
 	}
 	s := tuningScript(cfg, map[string]string{"GOOD": "a b", "bad key": "x", "EVIL": "$(id)"})
@@ -453,8 +466,11 @@ func TestGeneratedScriptsAreValidShell(t *testing.T) {
 	cfg.ConsoleAllowFrom = "203.0.113.0/24"
 	cfg.InstallDir = "~/my dune"
 	scripts := map[string]string{
-		"bootstrap-latest": bootstrapScript(cfg, false),
-		"bootstrap-pinned": pinnedBootstrapScript(cfg),
+		"bootstrap-pinned": pinnedBootstrapScript(cfg, BuiltinPin()),
+		"finalize":         completeCheckScript(cfg, 8088),
+		"sudo-revoke":      sudoRevokeScript,
+		"sudo-check":       sudoRevokedCheckScript,
+		"detach-cleanup":   detachCleanupScript("install"),
 		"install":          installScript(cfg, 8088),
 		"check-bootstrap":  checkBootstrapScript(cfg),
 		"check-install":    checkInstallScript(cfg, 8088),

@@ -11,8 +11,6 @@ import (
 	"github.com/dev-prophet-code/dd-installer/internal/model"
 )
 
-const upstreamBootstrap = "https://raw.githubusercontent.com/Red-Blink/dune-awakening-selfhost-docker/main/bootstrap.sh"
-
 // prelude is prepended to every script. dgrp runs a command with Docker
 // access even when the docker group membership is not active in this login
 // session yet (right after the upstream installer added the user).
@@ -60,25 +58,6 @@ func randID() string {
 func heredoc(dst, content string) string {
 	d := "DD_EOF_" + randID()
 	return fmt.Sprintf("cat > %s <<'%s'\n%s\n%s\n", dst, d, content, d)
-}
-
-func bootstrapScript(cfg model.Config, reuse bool) string {
-	d := dirExpr(cfg)
-	var b strings.Builder
-	b.WriteString(withPrelude("set -e\n"))
-	fmt.Fprintf(&b, "DIR=\"%s\"\n", d)
-	b.WriteString(`if [ -f "$DIR/install.sh" ]; then
-  echo "Existing Dune Docker found in $DIR - reusing it (nothing is overwritten)."
-  exit 0
-fi
-`)
-	if reuse {
-		b.WriteString("echo \"Folder $DIR exists but is incomplete; remove it manually or choose another folder.\" >&2; exit 1\n")
-		return b.String()
-	}
-	// bootstrap.sh itself refuses root, existing dirs and low disk space.
-	fmt.Fprintf(&b, "curl -fsSL --proto '=https' --retry 3 '%s' | DUNE_BOOTSTRAP_SKIP_INSTALL=1 DUNE_INSTALL_DIR=\"$DIR\" sh\n", upstreamBootstrap)
-	return b.String()
 }
 
 func installScript(cfg model.Config, port int) string {

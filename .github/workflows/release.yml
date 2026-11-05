@@ -1,5 +1,5 @@
 name: Release
-# Versioned releases. The version comes from the VERSION file (e.g. 0.0.4-alpha).
+# Versioned releases. The version comes from the VERSION file (e.g. 0.0.5-alpha).
 # Every push to main builds the native app on each OS and publishes/updates the
 # release v<VERSION>; a version containing "-" (alpha/beta/rc) is a pre-release.
 # Notes come from CHANGELOG.md. Each OS builds on its own runner (the GUI needs
@@ -8,6 +8,8 @@ name: Release
 on:
   push:
     branches: [main]
+    # The checksum list is read at install time, so changing it needs no new build.
+    paths-ignore: ['upstream/**']
   workflow_dispatch:
 permissions:
   contents: write

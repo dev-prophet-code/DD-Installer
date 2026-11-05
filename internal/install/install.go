@@ -50,6 +50,8 @@ type Options struct {
 	MaxFixAttempts int
 	// Sleep allows tests to skip waits.
 	Sleep func(time.Duration)
+	// Upstream returns the current checksum list (default: FetchManifest).
+	Upstream func(context.Context) (Manifest, error)
 }
 
 type step struct {
@@ -66,6 +68,8 @@ type step struct {
 
 type state struct {
 	port      int
+	pin       Pin    // the release to download and its expected checksum
+	testedTag string // the release DD-Installer was verified with
 	reuse     bool
 	sudoGrant bool
 	version   string // upstream version found on the target
@@ -102,13 +106,8 @@ func buildSteps(o *Options) []step {
 	}
 	return []step{
 		{ID: "bootstrap", Title: "Download Dune Docker",
-			Script: func(s *state) string {
-				if cfg.UpstreamLatest {
-					return bootstrapScript(cfg, s.reuse)
-				}
-				return pinnedBootstrapScript(cfg)
-			},
-			Check: func(*state) string { return checkBootstrapScript(cfg) }},
+			Script: func(s *state) string { return pinnedBootstrapScript(cfg, s.pin) },
+			Check:  func(*state) string { return checkBootstrapScript(cfg) }},
 		{ID: "install", Title: "Install Docker & start the Web UI", Detach: true,
 			Script: func(s *state) string { return installScript(cfg, s.port) },
 			Check:  func(s *state) string { return checkInstallScript(cfg, s.port) }},
@@ -186,6 +185,13 @@ func Run(ctx context.Context, o Options) error {
 		o.MaxFixAttempts = 3
 	}
 	st := &state{port: o.Cfg.WebPort}
+	// Read the CURRENT expected checksum before anything is downloaded.
+	pin, testedTag, note, perr := ResolvePin(ctx, o.Cfg.UpstreamLatest, o.Upstream)
+	if perr != nil {
+		return perr
+	}
+	st.pin, st.testedTag = pin, testedTag
+	o.Emit(Event{Type: "log", Msg: note})
 	red := newRedactor(o.Cfg.FuncomToken, o.Cfg.SSH.Password, o.Cfg.SSH.Passphrase)
 	secrets := o.Cfg.SSH.Password
 	steps := buildSteps(&o)
@@ -226,8 +232,8 @@ func Run(ctx context.Context, o Options) error {
 			st.learn(out)
 			if err == nil && code == 0 {
 				o.Emit(Event{Type: "step", Step: s.ID, Status: "ok", Msg: s.Title})
-				if s.ID == "install" && st.version != "" && !tested(st.version) {
-					o.Emit(Event{Type: "log", Msg: fmt.Sprintf("WARNING: the server runs Dune Docker %s but DD-Installer was tested with %s. Layout steps may not work with other versions.", st.version, UpstreamTag)})
+				if s.ID == "install" && st.version != "" && !tested(st.version, st.testedTag) {
+					o.Emit(Event{Type: "log", Msg: fmt.Sprintf("WARNING: the server runs Dune Docker %s but DD-Installer was tested with %s. Layout steps may not work with other versions.", st.version, st.testedTag)})
 				}
 				break
 			}

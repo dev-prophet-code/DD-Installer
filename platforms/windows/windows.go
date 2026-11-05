@@ -10,7 +10,9 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"runtime"
 	"strings"
+	"syscall"
 	"time"
 	"unicode/utf16"
 
@@ -141,6 +143,28 @@ func (win) LocalRunner(cfg model.Config) (transport.Runner, error) {
 		return nil, errors.New("docker-desktop is Docker Desktop's internal distribution; choose an Ubuntu distribution")
 	}
 	return &transport.Local{Label: "WSL2 (" + d + ")", Cmd: append([]string{"wsl.exe", "-d", d, "--exec"}, transport.ShellArgs...)}, nil
+}
+
+// PreventSleep keeps Windows awake (SetThreadExecutionState) until released.
+// The request belongs to the thread that made it, so a dedicated goroutine
+// owns an OS thread for the whole time.
+func (win) PreventSleep() func() {
+	const (
+		esContinuous     = 0x80000000
+		esSystemRequired = 0x00000001
+	)
+	proc := syscall.NewLazyDLL("kernel32.dll").NewProc("SetThreadExecutionState")
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		runtime.LockOSThread()
+		defer runtime.UnlockOSThread()
+		proc.Call(uintptr(esContinuous | esSystemRequired))
+		<-stop
+		proc.Call(uintptr(esContinuous))
+	}()
+	return func() { close(stop); <-done }
 }
 
 func (win) DefaultSSHKeys() []string { return platforms.SSHKeyCandidates() }

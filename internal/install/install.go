@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -53,16 +55,98 @@ type Options struct {
 type step struct {
 	ID, Title string
 	Script    func(*state) string
-	Optional  bool // failure does not abort the run
+	// Check, if set, returns a quick script that exits 0 when the step is
+	// already done on the target; the step is then skipped (resume support).
+	Check func(*state) string
+	// Detach runs the step in the background on the target and follows its
+	// log, so a dropped connection or a sleeping laptop cannot stop it.
+	Detach   bool
+	Optional bool // failure does not abort the run
 }
 
 type state struct {
 	port      int
 	reuse     bool
 	sudoGrant bool
+	version   string // upstream version found on the target
 }
 
-// Run executes the full installation. It returns nil on success.
+var (
+	portRe    = regexp.MustCompile(`(?m)^DD_PORT (\d{1,5})\s*$`)
+	versionRe = regexp.MustCompile(`(?m)^DD_UPSTREAM_VERSION (\S+)\s*$`)
+)
+
+// learn reads marker lines printed by step and check scripts.
+func (st *state) learn(out string) {
+	if m := portRe.FindAllStringSubmatch(out, -1); len(m) > 0 {
+		if p, err := strconv.Atoi(m[len(m)-1][1]); err == nil && p > 0 && p < 65536 {
+			st.port = p
+		}
+	}
+	if m := versionRe.FindAllStringSubmatch(out, -1); len(m) > 0 {
+		st.version = m[len(m)-1][1]
+	}
+}
+
+func buildSteps(o *Options) []step {
+	cfg := o.Cfg
+	setupParams := func(s *state, extra map[string]any) string {
+		m := map[string]any{"port": s.port, "passwordFile": passwordFile(cfg)}
+		for k, v := range extra {
+			m[k] = v
+		}
+		return mustJSON(m)
+	}
+	readyCheck := func(*state) string {
+		return withPrelude(fmt.Sprintf("cd \"%s\" 2>/dev/null || exit 1\ndgrp runtime/scripts/dune ready >/dev/null 2>&1\n", dirExpr(cfg)))
+	}
+	return []step{
+		{ID: "bootstrap", Title: "Download Dune Docker",
+			Script: func(s *state) string {
+				if cfg.UpstreamLatest {
+					return bootstrapScript(cfg, s.reuse)
+				}
+				return pinnedBootstrapScript(cfg)
+			},
+			Check: func(*state) string { return checkBootstrapScript(cfg) }},
+		{ID: "install", Title: "Install Docker & start the Web UI", Detach: true,
+			Script: func(s *state) string { return installScript(cfg, s.port) },
+			Check:  func(s *state) string { return checkInstallScript(cfg, s.port) }},
+		{ID: "tuning", Title: "Apply performance tuning", Optional: true,
+			Script: func(*state) string {
+				if !cfg.ApplyTuning {
+					return ""
+				}
+				return tuningScript(cfg, o.Report.Env)
+			}},
+		{ID: "console-setup", Title: "Configure server & deploy game files",
+			Script: func(s *state) string {
+				return consoleScript(cfg, "setup", setupParams(s, map[string]any{"title": cfg.ServerTitle, "region": cfg.Region, "token": cfg.FuncomToken}))
+			},
+			Check: func(s *state) string { return consoleScript(cfg, "check-setup", setupParams(s, nil)) }},
+		{ID: "start", Title: "Start the battlegroup",
+			Script: func(s *state) string { return consoleScript(cfg, "start", setupParams(s, nil)) },
+			Check:  readyCheck},
+		{ID: "ready", Title: "Wait for readiness",
+			Script: func(*state) string { return readyScript(cfg, 45) },
+			Check:  readyCheck},
+		{ID: "layout", Title: "Create Sietches & Deep Desert",
+			Script: func(s *state) string {
+				return consoleScript(cfg, "layout", setupParams(s, map[string]any{"sietches": cfg.Sietches, "deepDesert": cfg.DeepDesert, "combat": o.ExperimentalCombat}))
+			}},
+		{ID: "post", Title: "Final tuning commands", Optional: true,
+			Script: func(*state) string {
+				if !cfg.ApplyTuning {
+					return ""
+				}
+				return postScript(cfg, o.Report.PostCommands)
+			}},
+	}
+}
+
+// Run executes the full installation. It returns nil on success. Running it
+// again after a failure continues where it stopped: finished steps are
+// detected on the target and skipped.
 func Run(ctx context.Context, o Options) error {
 	if o.Sleep == nil {
 		o.Sleep = time.Sleep
@@ -73,39 +157,7 @@ func Run(ctx context.Context, o Options) error {
 	st := &state{port: o.Cfg.WebPort}
 	red := newRedactor(o.Cfg.FuncomToken, o.Cfg.SSH.Password, o.Cfg.SSH.Passphrase)
 	secrets := o.Cfg.SSH.Password
-
-	steps := []step{
-		{"bootstrap", "Download Dune Docker", func(s *state) string { return bootstrapScript(o.Cfg, s.reuse) }, false},
-		{"install", "Install Docker & start the Web UI", func(s *state) string { return installScript(o.Cfg, s.port) }, false},
-		{"tuning", "Apply performance tuning", func(s *state) string {
-			if !o.Cfg.ApplyTuning {
-				return ""
-			}
-			return tuningScript(o.Cfg, o.Report.Env)
-		}, true},
-		{"console-setup", "Configure server & deploy game files", func(s *state) string {
-			return consoleScript(o.Cfg, "setup", mustJSON(map[string]any{
-				"port": s.port, "passwordFile": passwordFile(o.Cfg),
-				"title": o.Cfg.ServerTitle, "region": o.Cfg.Region, "token": o.Cfg.FuncomToken,
-			}))
-		}, false},
-		{"start", "Start the battlegroup", func(s *state) string {
-			return consoleScript(o.Cfg, "start", mustJSON(map[string]any{"port": s.port, "passwordFile": passwordFile(o.Cfg)}))
-		}, false},
-		{"ready", "Wait for readiness", func(s *state) string { return readyScript(o.Cfg, 45) }, false},
-		{"layout", "Create Sietches & Deep Desert", func(s *state) string {
-			return consoleScript(o.Cfg, "layout", mustJSON(map[string]any{
-				"port": s.port, "passwordFile": passwordFile(o.Cfg),
-				"sietches": o.Cfg.Sietches, "deepDesert": o.Cfg.DeepDesert, "combat": o.ExperimentalCombat,
-			}))
-		}, false},
-		{"post", "Final tuning commands", func(s *state) string {
-			if !o.Cfg.ApplyTuning {
-				return ""
-			}
-			return postScript(o.Cfg, o.Report.PostCommands)
-		}, true},
-	}
+	steps := buildSteps(&o)
 
 	defer func() {
 		if st.sudoGrant {
@@ -115,9 +167,9 @@ func Run(ctx context.Context, o Options) error {
 			o.Emit(Event{Type: "log", Msg: "Temporary sudo grant removed."})
 		}
 	}()
-
 	defer func() { _ = o.Runner.Close() }() // Run owns the runner (it may be replaced on reconnect)
-	fixed := map[string]int{}               // rule -> times applied; capped by the rule's MaxUses
+
+	fixed := map[string]int{} // rule -> times applied; capped by the rule's MaxUses
 	for _, s := range steps {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -126,14 +178,41 @@ func Run(ctx context.Context, o Options) error {
 			o.Emit(Event{Type: "step", Step: s.ID, Status: "skipped", Msg: s.Title})
 			continue
 		}
+		if s.Check != nil {
+			if out, code, err := transport.Capture(ctx, o.Runner, s.Check(st)); err == nil && code == 0 {
+				st.learn(out)
+				o.Emit(Event{Type: "step", Step: s.ID, Status: "skipped", Msg: s.Title + " (already done)"})
+				continue
+			}
+		}
 		o.Emit(Event{Type: "step", Step: s.ID, Status: "running", Msg: s.Title})
-		attempts := 0
+		attempts, lost := 0, 0
 		for {
 			script := s.Script(st)
-			code, out, err := runScript(ctx, o, red, script)
+			var (
+				code int
+				out  string
+				err  error
+			)
+			if s.Detach {
+				code, out, err = runDetached(ctx, &o, red, s.ID, script)
+			} else {
+				code, out, err = runScript(ctx, o, red, script)
+			}
+			st.learn(out)
 			if err == nil && code == 0 {
 				o.Emit(Event{Type: "step", Step: s.ID, Status: "ok", Msg: s.Title})
+				if s.ID == "install" && st.version != "" && !tested(st.version) {
+					o.Emit(Event{Type: "log", Msg: fmt.Sprintf("WARNING: the server runs Dune Docker %s but DD-Installer was tested with %s. Layout steps may not work with other versions.", st.version, UpstreamTag)})
+				}
 				break
+			}
+			if err != nil && transport.IsConnectionLost(err) && lost < 5 && ctx.Err() == nil {
+				lost++
+				if o.reconnect(ctx) {
+					o.Emit(Event{Type: "log", Msg: "Continuing the step after reconnecting (it is safe to repeat)."})
+					continue
+				}
 			}
 			errStr := ""
 			if err != nil {
@@ -145,17 +224,17 @@ func Run(ctx context.Context, o Options) error {
 					o.Emit(Event{Type: "log", Msg: "Optional step failed; continuing."})
 					break
 				}
-				return fmt.Errorf("step %q failed (exit %d)", s.ID, code)
+				return fmt.Errorf("step %q failed (exit %d). Press Install again to continue from here", s.ID, code)
 			}
 			retried, abort := solve(ctx, &o, st, s.ID, red.apply(assistant.Tail(out, 60)), red.apply(errStr), code, fixed, secrets)
 			if abort {
-				return fmt.Errorf("step %q failed and needs manual action", s.ID)
+				return fmt.Errorf("step %q failed and needs manual action. After fixing it, press Install again to continue", s.ID)
 			}
 			if !retried {
 				if s.Optional {
 					break
 				}
-				return fmt.Errorf("step %q failed (exit %d)", s.ID, code)
+				return fmt.Errorf("step %q failed (exit %d). Press Install again to continue from here", s.ID, code)
 			}
 			attempts++
 			o.Emit(Event{Type: "step", Step: s.ID, Status: "running", Msg: s.Title + " (retry " + fmt.Sprint(attempts) + ")"})
@@ -273,22 +352,40 @@ func sshUser(cfg model.Config, h probe.Info) string {
 	return h.User
 }
 
+// lineSink turns raw output into redacted log events and keeps a copy.
+type lineSink struct {
+	w   *lineWriter
+	mu  sync.Mutex
+	all *bytes.Buffer
+}
+
+func newLineSink(o *Options, red *redactor, all *bytes.Buffer) *lineSink {
+	s := &lineSink{all: all}
+	s.w = &lineWriter{fn: func(line string) {
+		line = red.line(line)
+		s.mu.Lock()
+		s.all.WriteString(line + "\n")
+		s.mu.Unlock()
+		if strings.HasPrefix(line, "DD_PORT ") || strings.HasPrefix(line, "DD_UPSTREAM_VERSION ") || strings.HasPrefix(line, "DD_DETACH ") {
+			return // machine-readable markers, not for the user
+		}
+		o.Emit(Event{Type: "log", Msg: line})
+	}}
+	return s
+}
+
+func (s *lineSink) Write(p []byte) (int, error) { return s.w.Write(p) }
+func (s *lineSink) Flush()                      { s.w.Flush() }
+
 // runScript executes script on the runner, streaming redacted lines to the
 // UI and returning the redacted output.
 func runScript(ctx context.Context, o Options, red *redactor, script string) (int, string, error) {
-	var mu sync.Mutex
 	var all bytes.Buffer
-	w := &lineWriter{fn: func(line string) {
-		line = red.line(line)
-		mu.Lock()
-		all.WriteString(line + "\n")
-		mu.Unlock()
-		o.Emit(Event{Type: "log", Msg: line})
-	}}
-	code, err := o.Runner.Run(ctx, script, w)
-	w.Flush()
-	mu.Lock()
-	defer mu.Unlock()
+	sink := newLineSink(&o, red, &all)
+	code, err := o.Runner.Run(ctx, script, sink)
+	sink.Flush()
+	sink.mu.Lock()
+	defer sink.mu.Unlock()
 	return code, all.String(), err
 }
 

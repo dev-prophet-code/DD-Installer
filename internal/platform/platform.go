@@ -33,6 +33,10 @@ type Platform interface {
 	// (Windows: WSL2 + Ubuntu with a prepared user). log receives progress
 	// lines. needsReboot is true when Windows must restart before continuing.
 	ProvisionLocal(ctx context.Context, log func(string)) (needsReboot bool, err error)
+	// PreventSleep asks the OS not to sleep while an installation runs and
+	// returns a function that lifts the request again. Best effort: it
+	// returns a no-op when the OS offers no way to do it.
+	PreventSleep() (release func())
 	// DefaultSSHKeys lists likely private key paths for the key picker.
 	DefaultSSHKeys() []string
 }

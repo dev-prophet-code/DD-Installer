@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/dev-prophet-code/dd-installer/internal/model"
@@ -37,6 +38,19 @@ func (linux) LocalRunner(model.Config) (transport.Runner, error) { return transp
 
 func (linux) ProvisionLocal(context.Context, func(string)) (bool, error) {
 	return false, errors.New("nothing to provision on Linux")
+}
+
+// PreventSleep holds a systemd idle/sleep inhibitor while installing.
+func (linux) PreventSleep() func() {
+	p, err := exec.LookPath("systemd-inhibit")
+	if err != nil {
+		return func() {}
+	}
+	cmd := exec.Command(p, "--what=idle:sleep", "--who=DD-Installer", "--why=Installing a Dune Docker server", "--mode=block", "sleep", "86400")
+	if err := cmd.Start(); err != nil {
+		return func() {}
+	}
+	return func() { _ = cmd.Process.Kill(); _ = cmd.Wait() }
 }
 
 func (linux) DefaultSSHKeys() []string { return platforms.SSHKeyCandidates() }

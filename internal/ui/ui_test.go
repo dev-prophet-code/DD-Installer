@@ -38,6 +38,7 @@ func (f *fakePF) ProvisionLocal(context.Context, func(string)) (bool, error) {
 	f.prov++
 	return false, nil
 }
+func (f *fakePF) PreventSleep() func()     { return func() {} }
 func (f *fakePF) DefaultSSHKeys() []string { return nil }
 
 func newTest(t *testing.T, pf *fakePF) *wizard {

@@ -83,9 +83,30 @@ fi
 
 func installScript(cfg model.Config, port int) string {
 	return withPrelude(fmt.Sprintf(`set -e
-cd "%s"
-ADMIN_BIND_PORT=%d ./install.sh
+cd "%[1]s"
+ADMIN_BIND_PORT=%[2]d ./install.sh
+P=$(sed -n 's/^ADMIN_BIND_PORT=//p' .env 2>/dev/null | tail -n1)
+echo "DD_PORT ${P:-%[2]d}"
+echo "DD_UPSTREAM_VERSION $(tr -d '[:space:]' < VERSION 2>/dev/null)"
 `, dirExpr(cfg), port))
+}
+
+// checkBootstrapScript exits 0 when the release files are already in place.
+func checkBootstrapScript(cfg model.Config) string {
+	return fmt.Sprintf("[ -f \"%s/install.sh\" ]\n", dirExpr(cfg))
+}
+
+// checkInstallScript exits 0 when the Web Console already answers; it also
+// reports the port it found so later steps use the right one.
+func checkInstallScript(cfg model.Config, port int) string {
+	return fmt.Sprintf(`cd "%[1]s" 2>/dev/null || exit 1
+P=$(sed -n 's/^ADMIN_BIND_PORT=//p' .env 2>/dev/null | tail -n1)
+P=${P:-%[2]d}
+command -v curl >/dev/null 2>&1 || exit 1
+curl -fsS -m 5 "http://127.0.0.1:$P/api/health" >/dev/null 2>&1 || exit 1
+echo "DD_PORT $P"
+echo "DD_UPSTREAM_VERSION $(tr -d '[:space:]' < VERSION 2>/dev/null)"
+`, dirExpr(cfg), port)
 }
 
 // tuningScript writes .env overrides (values come only from the sizing
@@ -188,11 +209,18 @@ echo '%[1]s ALL=(ALL) NOPASSWD:ALL' > "$TMP"
 printf '%%s\n' "$DD_SUDO_PW" | sudo -S -p '' sh -c "visudo -cf '$TMP' >/dev/null && install -m 0440 -o root -g root '$TMP' /etc/sudoers.d/90-dd-installer"
 rm -f "$TMP"
 sudo -n true
-echo "Temporary passwordless sudo enabled for %[1]s (removed when the installation ends)."
+# safety net: remove the grant after 3 hours even if DD-Installer crashes or is closed
+if command -v systemd-run >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
+  sudo -n systemd-run --quiet --unit=dd-installer-sudo-revoke --on-active=3h /bin/rm -f /etc/sudoers.d/90-dd-installer >/dev/null 2>&1 || true
+else
+  sudo -n sh -c 'nohup sh -c "sleep 10800; rm -f /etc/sudoers.d/90-dd-installer" >/dev/null 2>&1 &' || true
+fi
+echo "Temporary passwordless sudo enabled for %[1]s (removed when the installation ends, at the latest after 3 hours)."
 `, user)
 }
 
 const sudoRevokeScript = `sudo -n rm -f /etc/sudoers.d/90-dd-installer 2>/dev/null || true
+sudo -n systemctl stop dd-installer-sudo-revoke.timer 2>/dev/null || true
 `
 
 // consoleHelper talks to the Dune Docker Console API on 127.0.0.1 of the
@@ -286,8 +314,24 @@ def post_task(path, body):
         sys.exit(32)
     return j["task"]
 
+if phase == "check-setup":
+    try:
+        s, j = call("GET", "/api/setup/state", timeout=8)
+        done = s == 200 and bool((j.get("files") or {}).get("complete"))
+    except Exception:
+        done = False
+    out("setup complete" if done else "setup not complete")
+    sys.exit(0 if done else 1)
+
 wait_health()
 login()
+
+def attach_running(op):
+    s, j = call("GET", "/api/setup/tasks", timeout=30)
+    for t in j.get("tasks", []):
+        if t.get("operation") == op and t.get("status") in ("queued", "running"):
+            return t
+    return None
 
 if phase == "setup":
     s, j = call("POST", "/api/setup/write-config", {"SERVER_TITLE": P["title"], "SERVER_REGION": P["region"]})
@@ -298,8 +342,13 @@ if phase == "setup":
     if s != 200:
         out("DD_ERR token rejected:", s, j.get("error", "")); sys.exit(33)
     out("Funcom token saved.")
-    out("Deploying (downloads the game files - this can take a long time)...")
-    task_wait(post_task("/api/setup/init", {}), label="init")
+    running = attach_running("init")
+    if running:
+        out("A deployment is already running on the server - continuing to follow it.")
+        task_wait(running, label="init")
+    else:
+        out("Deploying (downloads the game files - this can take a long time)...")
+        task_wait(post_task("/api/setup/init", {}), label="init")
     out("Deployment complete.")
 
 elif phase == "start":

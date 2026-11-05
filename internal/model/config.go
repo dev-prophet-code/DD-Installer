@@ -127,17 +127,24 @@ func (c *Config) Validate() []string {
 	switch c.Target {
 	case TargetLocal:
 	case TargetSSH:
+		// The same strict checks as the input fields: Validate is the last
+		// line of defence for values that never passed through the UI (for
+		// example an imported ~/.ssh/config), because the user name ends up
+		// in scripts and in the sudoers file.
 		if strings.TrimSpace(c.SSH.Host) == "" {
 			add("ssh: host is required")
+		} else if err := ValidHost(c.SSH.Host); err != nil {
+			add("ssh: host: %v", err)
 		}
 		if c.SSH.Port < 1 || c.SSH.Port > 65535 {
 			add("ssh: port must be 1-65535")
 		}
 		if strings.TrimSpace(c.SSH.User) == "" {
 			add("ssh: user is required")
-		}
-		if c.SSH.User == "root" {
+		} else if c.SSH.User == "root" {
 			add("ssh: Dune Docker refuses to install as root; use a regular user with sudo")
+		} else if err := ValidUser(c.SSH.User); err != nil {
+			add("ssh: user: %v", err)
 		}
 		if j := strings.TrimSpace(c.SSH.Jump); j != "" && !jumpRe.MatchString(j) {
 			add("ssh: jump host must look like user@host or user@host:port (one hop)")

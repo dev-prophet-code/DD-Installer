@@ -17,7 +17,7 @@ import (
 )
 
 // installSteps are the step IDs the overall progress bar counts.
-var installSteps = []string{"bootstrap", "install", "tuning", "console-setup", "start", "ready", "layout", "verify", "firewall", "post"}
+var installSteps = []string{"bootstrap", "install", "tuning", "console-setup", "start", "ready", "layout", "verify", "firewall", "post", "finalize"}
 
 const (
 	maxLogLines  = 5000 // kept in memory

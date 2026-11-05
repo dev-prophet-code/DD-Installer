@@ -43,6 +43,23 @@ func (e *HostKeyError) Error() string {
 	return who + " not yet confirmed: " + e.Fingerprint
 }
 
+// HostKeyRevokedError is returned when the server key is marked @revoked in
+// ~/.ssh/known_hosts. Unlike HostKeyError it can never be confirmed in the UI:
+// someone deliberately declared this key untrustworthy.
+type HostKeyRevokedError struct {
+	Fingerprint string
+	Jump        bool
+}
+
+func (e *HostKeyRevokedError) Error() string {
+	who := "The SSH host key"
+	if e.Jump {
+		who = "The SSH jump host key"
+	}
+	return who + " (" + e.Fingerprint + ") is marked @revoked in ~/.ssh/known_hosts. DD-Installer refuses to connect. " +
+		"Remove the @revoked line only if you are sure the key is trustworthy again."
+}
+
 // SSH is a Runner over an SSH connection.
 type SSH struct {
 	cfg     model.SSHConfig
@@ -88,16 +105,28 @@ type policy struct {
 	known        ssh.HostKeyCallback
 	requireKnown bool
 	jump         bool
-	seen         string
+	// err is exactly what check returned. connect() reports it instead of
+	// guessing from the handshake error, so that a wrong password on a trusted
+	// host is not mistaken for a host-key problem.
+	err error
 }
 
 func (p *policy) check(hostname string, remote net.Addr, key ssh.PublicKey) error {
+	p.err = p.decide(hostname, remote, key)
+	return p.err
+}
+
+func (p *policy) decide(hostname string, remote net.Addr, key ssh.PublicKey) error {
 	fp := ssh.FingerprintSHA256(key)
-	p.seen = fp
 	if p.known != nil {
 		err := p.known(hostname, remote, key)
 		if err == nil {
 			return nil
+		}
+		// A revoked key is final: neither a session pin nor a confirmation may override it.
+		var re *knownhosts.RevokedError
+		if errors.As(err, &re) {
+			return &HostKeyRevokedError{Fingerprint: fp, Jump: p.jump}
 		}
 		var ke *knownhosts.KeyError
 		if errors.As(err, &ke) && len(ke.Want) > 0 {
@@ -192,12 +221,15 @@ func connect(ctx context.Context, cfg model.SSHConfig, pol *policy) (client, jum
 		if jump != nil {
 			jump.Close()
 		}
+		// Only a failed host-key decision is reported as such. Any other
+		// failure (wrong password, no matching key, ...) keeps its own message.
 		var hk *HostKeyError
-		if errors.As(err, &hk) {
-			return nil, nil, hk
+		var rv *HostKeyRevokedError
+		if errors.As(pol.err, &hk) || errors.As(pol.err, &rv) {
+			return nil, nil, pol.err
 		}
-		if pol.seen != "" && pol.pinned == "" && !pol.requireKnown {
-			return nil, nil, &HostKeyError{Fingerprint: pol.seen, Jump: pol.jump}
+		if pol.err != nil { // e.g. the jump-host rule: not in known_hosts
+			return nil, nil, pol.err
 		}
 		return nil, nil, fmt.Errorf("ssh connect %s: %w", addr, err)
 	}
@@ -233,16 +265,27 @@ func ScanHostKey(ctx context.Context, cfg model.SSHConfig) (string, error) {
 	}
 	defer conn.Close()
 	var fp string
+	revoked := false
+	known := loadKnownHosts()
 	sc, _, _, err := ssh.NewClientConn(conn, addr, &ssh.ClientConfig{
 		User: "dd-installer-probe",
-		HostKeyCallback: func(_ string, _ net.Addr, k ssh.PublicKey) error {
+		HostKeyCallback: func(h string, a net.Addr, k ssh.PublicKey) error {
 			fp = ssh.FingerprintSHA256(k)
+			if known != nil {
+				var re *knownhosts.RevokedError
+				if kerr := known(h, a, k); kerr != nil && errors.As(kerr, &re) {
+					revoked = true
+				}
+			}
 			return errors.New("fingerprint captured")
 		},
 		Timeout: 10 * time.Second,
 	})
 	if sc != nil {
 		sc.Close()
+	}
+	if revoked {
+		return "", &HostKeyRevokedError{Fingerprint: fp}
 	}
 	if fp != "" {
 		return fp, nil

@@ -103,7 +103,7 @@ func checkInstallScript(cfg model.Config, port int) string {
 P=$(sed -n 's/^ADMIN_BIND_PORT=//p' .env 2>/dev/null | tail -n1)
 P=${P:-%[2]d}
 command -v curl >/dev/null 2>&1 || exit 1
-curl -fsS -m 5 "http://127.0.0.1:$P/api/health" >/dev/null 2>&1 || exit 1
+curl --noproxy '*' -fsS -m 5 "http://127.0.0.1:$P/api/health" >/dev/null 2>&1 || exit 1
 echo "DD_PORT $P"
 echo "DD_UPSTREAM_VERSION $(tr -d '[:space:]' < VERSION 2>/dev/null)"
 `, dirExpr(cfg), port)
@@ -198,30 +198,75 @@ func postScript(cfg model.Config, cmds []string) string {
 	return b.String()
 }
 
+// sudoBootUnit is the systemd unit that removes the temporary grant at the
+// next boot. The 3-hour timer is transient and a reboot (kernel update, Docker
+// setup) would otherwise leave passwordless sudo behind for good.
+const sudoBootUnit = "dd-installer-sudo-boot-revoke.service"
+
 // sudoGrantScript gives the user temporary passwordless sudo using the
 // password supplied on stdin by the orchestrator (variable DD_SUDO_PW is set
 // by the wrapper). It validates the file with visudo before activating it.
+// The user name is validated and quoted: it ends up in a sudoers file.
 func sudoGrantScript(user string) string {
+	if err := model.ValidUser(user); err != nil {
+		return "echo 'DD-Installer refuses to grant sudo to an invalid user name.' >&2\nexit 1\n"
+	}
 	return fmt.Sprintf(`set -e
 [ -n "${DD_SUDO_PW:-}" ] || { echo "No sudo password available" >&2; exit 1; }
 TMP=$(mktemp)
-echo '%[1]s ALL=(ALL) NOPASSWD:ALL' > "$TMP"
+printf '%%s ALL=(ALL) NOPASSWD:ALL\n' %[1]s > "$TMP"
 printf '%%s\n' "$DD_SUDO_PW" | sudo -S -p '' sh -c "visudo -cf '$TMP' >/dev/null && install -m 0440 -o root -g root '$TMP' /etc/sudoers.d/90-dd-installer"
 rm -f "$TMP"
 sudo -n true
-# safety net: remove the grant after 3 hours even if DD-Installer crashes or is closed
+# Safety nets in case DD-Installer crashes or is closed: remove the grant after
+# 3 hours AND at the next boot (a transient timer does not survive a reboot).
 if command -v systemd-run >/dev/null 2>&1 && [ -d /run/systemd/system ]; then
+  printf '%%s\n' '[Unit]' 'Description=Remove the temporary DD-Installer sudo grant' '[Service]' 'Type=oneshot' \
+    'ExecStart=/bin/rm -f /etc/sudoers.d/90-dd-installer' \
+    'ExecStartPost=/bin/rm -f /etc/systemd/system/%[2]s /etc/systemd/system/multi-user.target.wants/%[2]s' \
+    '[Install]' 'WantedBy=multi-user.target' | sudo -n tee /etc/systemd/system/%[2]s >/dev/null || true
+  sudo -n systemctl daemon-reload >/dev/null 2>&1 || true
+  sudo -n systemctl enable %[2]s >/dev/null 2>&1 || true
   sudo -n systemd-run --quiet --unit=dd-installer-sudo-revoke --on-active=3h /bin/rm -f /etc/sudoers.d/90-dd-installer >/dev/null 2>&1 || true
 else
   sudo -n sh -c 'nohup sh -c "sleep 10800; rm -f /etc/sudoers.d/90-dd-installer" >/dev/null 2>&1 &' || true
 fi
-echo "Temporary passwordless sudo enabled for %[1]s (removed when the installation ends, at the latest after 3 hours)."
-`, user)
+echo "Temporary passwordless sudo enabled for "%[1]s" (removed as soon as the installation is verified, at the latest after 3 hours or at the next reboot)."
+`, shq(user), sudoBootUnit)
 }
 
-const sudoRevokeScript = `sudo -n rm -f /etc/sudoers.d/90-dd-installer 2>/dev/null || true
-sudo -n systemctl stop dd-installer-sudo-revoke.timer 2>/dev/null || true
+// sudoRevokeScript removes the temporary grant and its safety nets. The grant
+// file goes LAST: everything before it still needs the passwordless sudo.
+const sudoRevokeScript = `sudo -n systemctl stop dd-installer-sudo-revoke.timer dd-installer-sudo-revoke.service 2>/dev/null || true
+sudo -n systemctl disable ` + sudoBootUnit + ` >/dev/null 2>&1 || true
+sudo -n rm -f /etc/systemd/system/` + sudoBootUnit + ` /etc/systemd/system/multi-user.target.wants/` + sudoBootUnit + ` 2>/dev/null || true
+sudo -n systemctl daemon-reload >/dev/null 2>&1 || true
+sudo -n rm -f /etc/sudoers.d/90-dd-installer 2>/dev/null || true
 `
+
+// sudoRevokedCheckScript exits 0 only when passwordless sudo is really gone.
+// "sudo -k" drops any cached credential first, so the answer is not a cache hit.
+const sudoRevokedCheckScript = `sudo -k 2>/dev/null || true
+if sudo -n true 2>/dev/null; then exit 1; fi
+exit 0
+`
+
+// completeCheckScript verifies that the installation is finished AND works:
+// release files present, console answering, battlegroup ready, and Docker
+// usable by the install user. Exit codes tell which check failed.
+func completeCheckScript(cfg model.Config, port int) string {
+	return withPrelude(fmt.Sprintf(`cd "%[1]s" 2>/dev/null || { echo "Dune Docker folder not found" >&2; exit 1; }
+[ -f install.sh ] || { echo "install.sh is missing" >&2; exit 2; }
+P=$(sed -n 's/^ADMIN_BIND_PORT=//p' .env 2>/dev/null | tail -n1)
+P=${P:-%[2]d}
+command -v curl >/dev/null 2>&1 && { curl --noproxy '*' -fsS -m 8 "http://127.0.0.1:$P/api/health" >/dev/null 2>&1 || { echo "The web console does not answer on port $P" >&2; exit 3; }; }
+dgrp runtime/scripts/dune ready >/dev/null 2>&1 || { echo "The battlegroup is not ready" >&2; exit 4; }
+if ! docker info >/dev/null 2>&1; then
+  { command -v sg >/dev/null 2>&1 && sg docker -c 'docker info' >/dev/null 2>&1; } || { echo "Docker is not usable without sudo for this user" >&2; exit 5; }
+fi
+echo "Installation verified: files, web console (port $P), battlegroup and Docker access are in order."
+`, dirExpr(cfg), port))
+}
 
 // consoleHelper talks to the Dune Docker Console API on 127.0.0.1 of the
 // target, so no extra port has to be reachable from the installer machine.
@@ -230,9 +275,22 @@ const consoleHelper = `import json, sys, time, os, urllib.request, urllib.error,
 P = json.load(open(sys.argv[1]))
 phase = sys.argv[2]
 base = "http://127.0.0.1:%d" % P["port"]
-cj = http.cookiejar.CookieJar()
-op = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(cj))
 csrf = None
+
+def local_opener():
+    """The console runs on this very machine. urllib would send even 127.0.0.1
+    through an HTTP proxy from the environment (http_proxy) unless no_proxy
+    lists it, and the admin password and the Funcom token would travel to that
+    proxy. So: check, and talk to the console directly."""
+    cj = http.cookiejar.CookieJar()
+    handlers = [urllib.request.HTTPCookieProcessor(cj)]
+    found = sorted(k for k in os.environ if k.lower() in ("http_proxy", "https_proxy", "all_proxy"))
+    if found:
+        print("Proxy settings found (%s): not used for the local console, connecting directly." % ", ".join(found), flush=True)
+    handlers.insert(0, urllib.request.ProxyHandler({}))
+    return urllib.request.build_opener(*handlers)
+
+op = local_opener()
 
 def out(*a):
     print(*a, flush=True)

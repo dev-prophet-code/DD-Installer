@@ -122,3 +122,66 @@ func TestHyperVScriptPinsCommit(t *testing.T) {
 		t.Fatalf("commit pin looks wrong: %q", HyperVFixCommit)
 	}
 }
+
+// Different spellings of the home directory (or a folder that contains it) must
+// never be accepted, even when the home itself carries the Dune Docker markers.
+func TestUninstallGuardCannotBeBypassedWithPathTricks(t *testing.T) {
+	spellings := []string{"~/", "~//", "~/.", "~/./", "~/sub/..", "~/sub/../", "~/sub/../."}
+	for _, d := range spellings {
+		home := t.TempDir()
+		os.WriteFile(filepath.Join(home, "install.sh"), nil, 0o755)
+		os.WriteFile(filepath.Join(home, "docker-compose.yml"), nil, 0o644)
+		os.MkdirAll(filepath.Join(home, "runtime/scripts"), 0o755)
+		os.MkdirAll(filepath.Join(home, "sub"), 0o755)
+		os.WriteFile(filepath.Join(home, "runtime/scripts/dune"), []byte("#!/bin/sh\nexit 0\n"), 0o755)
+		keep := filepath.Join(home, "precious.txt")
+		os.WriteFile(keep, []byte("x"), 0o644)
+
+		cfg := model.Default()
+		cfg.InstallDir = d
+		out, code := run(t, home, uninstallAllScript(cfg))
+		if code == 0 || !strings.Contains(out, "Refusing") {
+			t.Errorf("%q: must be refused, got exit %d: %s", d, code, out)
+		}
+		if _, err := os.Stat(keep); err != nil {
+			t.Fatalf("%q wiped the home directory", d)
+		}
+	}
+
+	// an ancestor of the home directory is refused as well
+	parent := t.TempDir()
+	home := filepath.Join(parent, "u")
+	os.MkdirAll(filepath.Join(home), 0o755)
+	os.WriteFile(filepath.Join(parent, "install.sh"), nil, 0o755)
+	os.WriteFile(filepath.Join(parent, "docker-compose.yml"), nil, 0o644)
+	os.MkdirAll(filepath.Join(parent, "runtime"), 0o755)
+	cfg := model.Default()
+	cfg.InstallDir = parent
+	if out, code := run(t, home, uninstallAllScript(cfg)); code == 0 {
+		t.Fatalf("a folder containing HOME was accepted: %s", out)
+	}
+	if _, err := os.Stat(home); err != nil {
+		t.Fatal("the home directory was deleted")
+	}
+}
+
+// A symlink to the home directory resolves to it and is refused too.
+func TestUninstallGuardResolvesSymlinks(t *testing.T) {
+	home := t.TempDir()
+	os.WriteFile(filepath.Join(home, "install.sh"), nil, 0o755)
+	os.WriteFile(filepath.Join(home, "docker-compose.yml"), nil, 0o644)
+	os.MkdirAll(filepath.Join(home, "runtime"), 0o755)
+	keep := filepath.Join(home, "precious.txt")
+	os.WriteFile(keep, []byte("x"), 0o644)
+	if err := os.Symlink(home, filepath.Join(home, "link")); err != nil {
+		t.Skip("symlinks not available")
+	}
+	cfg := model.Default()
+	cfg.InstallDir = "~/link"
+	if out, code := run(t, home, uninstallAllScript(cfg)); code == 0 {
+		t.Fatalf("a symlink to HOME was accepted: %s", out)
+	}
+	if _, err := os.Stat(keep); err != nil {
+		t.Fatal("the home directory was wiped through a symlink")
+	}
+}

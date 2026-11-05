@@ -37,8 +37,9 @@ func ValidPort(s string) error {
 
 // ValidHost checks an SSH host (name, IPv4 or IPv6) or an ~/.ssh/config alias.
 func ValidHost(h string) error {
-	h = strings.TrimSpace(h)
-	if h == "" {
+	// The raw value is checked, not a trimmed copy: whitespace or a line break
+	// at the end must not slip through into scripts.
+	if strings.TrimSpace(h) == "" {
 		return errors.New("required")
 	}
 	if net.ParseIP(strings.Trim(h, "[]")) != nil {
@@ -55,9 +56,8 @@ func ValidHost(h string) error {
 
 // ValidUser checks the SSH user (must not be root).
 func ValidUser(u string) error {
-	u = strings.TrimSpace(u)
 	switch {
-	case u == "":
+	case strings.TrimSpace(u) == "":
 		return errors.New("required")
 	case u == "root":
 		return errors.New("use a regular user with sudo, not root")

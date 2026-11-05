@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"regexp"
 	"strconv"
 	"strings"
@@ -151,7 +150,29 @@ func buildSteps(o *Options) []step {
 				}
 				return postScript(cfg, o.Report.PostCommands)
 			}},
+		// Last step: prove that the installation is complete and works. Right
+		// after it the temporary sudo access is locked again (see Run).
+		{ID: "finalize", Title: "Verify the finished installation", Optional: true,
+			Script: func(s *state) string { return completeCheckScript(cfg, s.port) }},
 	}
+}
+
+// lockSudo removes the temporary sudo grant and VERIFIES that passwordless sudo
+// is really gone. It is a no-op when no grant was made. Called right after the
+// installation has been verified, and again from a defer as a safety net.
+func (o *Options) lockSudo(st *state) {
+	if !st.sudoGrant || o.Runner == nil {
+		return
+	}
+	c, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	_, _, _ = transport.Capture(c, o.Runner, sudoRevokeScript)
+	if _, code, err := transport.Capture(c, o.Runner, sudoRevokedCheckScript); err == nil && code == 0 {
+		st.sudoGrant = false
+		o.Emit(Event{Type: "log", Msg: "Temporary sudo access removed and verified: sudo asks for a password again."})
+		return
+	}
+	o.Emit(Event{Type: "log", Msg: "WARNING: DD-Installer could not confirm that the temporary sudo access is gone. Remove it yourself on the server: sudo rm -f /etc/sudoers.d/90-dd-installer"})
 }
 
 // Run executes the full installation. It returns nil on success. Running it
@@ -169,14 +190,7 @@ func Run(ctx context.Context, o Options) error {
 	secrets := o.Cfg.SSH.Password
 	steps := buildSteps(&o)
 
-	defer func() {
-		if st.sudoGrant {
-			c, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			_, _ = o.Runner.Run(c, sudoRevokeScript, io.Discard)
-			o.Emit(Event{Type: "log", Msg: "Temporary sudo grant removed."})
-		}
-	}()
+	defer func() { o.lockSudo(st) }()       // safety net for failures and cancellation
 	defer func() { _ = o.Runner.Close() }() // Run owns the runner (it may be replaced on reconnect)
 
 	fixed := map[string]int{} // rule -> times applied; capped by the rule's MaxUses
@@ -250,6 +264,9 @@ func Run(ctx context.Context, o Options) error {
 			o.Emit(Event{Type: "step", Step: s.ID, Status: "running", Msg: s.Title + " (retry " + fmt.Sprint(attempts) + ")"})
 		}
 	}
+	// Everything is installed and was verified by the "finalize" step: lock the
+	// temporary sudo access NOW, not only when the window is closed.
+	o.lockSudo(st)
 	o.Emit(Event{Type: "done", Msg: "Installation finished.", Port: st.port})
 	return nil
 }

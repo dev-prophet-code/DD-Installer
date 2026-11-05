@@ -36,3 +36,31 @@ func TestFieldValidators(t *testing.T) {
 		t.Error("allow-from validator")
 	}
 }
+
+// Validate is the last line of defence: SSH user and host end up in scripts
+// and in /etc/sudoers.d, so values that bypass the UI fields are rejected too.
+func TestValidateRejectsHostileSSHUserAndHost(t *testing.T) {
+	bad := []string{"x'; touch /tmp/p; echo '", "dune\nmallory", "dune\n", "a b", "$(id)", "`id`", "dune ALL=(ALL) ALL", "root", " "}
+	for _, u := range bad {
+		c := Default()
+		c.Target = TargetSSH
+		c.SSH = SSHConfig{Host: "h", Port: 22, User: u, Auth: AuthAgent}
+		if len(c.Validate()) == 0 {
+			t.Errorf("user %q accepted", u)
+		}
+	}
+	for _, h := range []string{"evil host", "h\nname", "h;id", "h$(id)", "h\n"} {
+		c := Default()
+		c.Target = TargetSSH
+		c.SSH = SSHConfig{Host: h, Port: 22, User: "dune", Auth: AuthAgent}
+		if len(c.Validate()) == 0 {
+			t.Errorf("host %q accepted", h)
+		}
+	}
+	c := Default()
+	c.Target = TargetSSH
+	c.SSH = SSHConfig{Host: "203.0.113.10", Port: 22, User: "dune.user-1", Auth: AuthAgent}
+	if errs := c.Validate(); len(errs) != 0 {
+		t.Fatalf("a normal user/host was rejected: %v", errs)
+	}
+}

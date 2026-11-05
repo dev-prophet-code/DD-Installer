@@ -27,7 +27,10 @@ func detachDir(id string) string { return "$HOME/.dd-installer/" + id }
 func detachStartScript(id, script string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "D=\"%s\"\n", detachDir(id))
-	b.WriteString(`mkdir -p "$D" && chmod 700 "$D"
+	// umask 077: the log can hold the generated admin password, so neither the
+	// folder nor the files may ever be readable by other users.
+	b.WriteString(`umask 077
+mkdir -p "$D" && chmod 700 "$HOME/.dd-installer" "$D"
 if [ -f "$D/pid" ] && [ ! -f "$D/exit" ] && kill -0 "$(cat "$D/pid")" 2>/dev/null; then
   echo "DD_DETACH already-running"
   exit 0
@@ -58,6 +61,22 @@ echo "DD_STATE $st"
 echo DD_BODY
 tail -c +%d "$D/log" 2>/dev/null | head -c $((sz - %d)) 2>/dev/null
 `, detachDir(id), offset+1, offset)
+}
+
+// detachCleanupScript removes the job folder (script, log, pid). The log holds
+// everything the installer printed, including the generated admin password, so
+// it must not stay on the server once DD-Installer has read it.
+func detachCleanupScript(id string) string {
+	return fmt.Sprintf(`rm -rf "%s"
+rmdir "$HOME/.dd-installer" 2>/dev/null || true
+`, detachDir(id))
+}
+
+// cleanupDetached is best effort; it is also safe to call twice.
+func (o *Options) cleanupDetached(id string) {
+	c, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	_, _, _ = transport.Capture(c, o.Runner, detachCleanupScript(id))
 }
 
 func detachKillScript(id string) string {
@@ -144,6 +163,7 @@ func runDetached(ctx context.Context, o *Options, red *redactor, id, script stri
 			kctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			_, _, _ = transport.Capture(kctx, o.Runner, detachKillScript(id))
 			cancel()
+			o.cleanupDetached(id)
 			return -1, all.String(), ctx.Err()
 		}
 		out, _, err := transport.Capture(ctx, o.Runner, detachPollScript(id, offset))
@@ -172,11 +192,13 @@ func runDetached(ctx context.Context, o *Options, red *redactor, id, script stri
 				continue // drain what was written just before the exit
 			}
 			code, _ := strconv.Atoi(strings.TrimPrefix(state, "exit:"))
+			o.cleanupDetached(id)
 			return code, all.String(), nil
 		default: // "gone": process vanished without an exit code (e.g. reboot)
 			if body != "" {
 				continue
 			}
+			o.cleanupDetached(id)
 			return -1, all.String(), fmt.Errorf("the background step stopped unexpectedly (the server may have restarted)")
 		}
 	}

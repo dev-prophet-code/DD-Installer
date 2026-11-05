@@ -115,24 +115,30 @@ func ByID(id string) (Action, bool) {
 }
 
 // uninstallAllScript has hard guard rails: it refuses to delete anything that
-// does not look like a Dune Docker folder, never "/" or the home directory.
+// does not look like a Dune Docker folder. The path is first resolved
+// (symlinks, "..", "//", trailing slashes) and every decision is made on the
+// resolved path, so spellings like "~//" or "~/sub/.." cannot get around the
+// checks. A folder that contains the home directory is always refused.
 func uninstallAllScript(cfg model.Config) string {
 	dir := install.DirExpr(cfg)
 	return install.WithPrelude(fmt.Sprintf(`set -u
 DIR="%s"
 fail() { echo "Refusing to continue: $1" >&2; exit 1; }
-case "$DIR" in ""|"/"|"$HOME"|"$HOME/"|"/home"|"/root"|"/usr"|"/etc"|"/var"|"/opt") fail "unsafe folder '$DIR'";; esac
 [ -d "$DIR" ] || fail "$DIR does not exist"
-[ -f "$DIR/install.sh" ] && [ -f "$DIR/docker-compose.yml" ] && [ -d "$DIR/runtime" ] || fail "$DIR does not look like a Dune Docker folder"
-cd "$DIR"
+REAL=$(cd "$DIR" 2>/dev/null && pwd -P) || fail "cannot resolve $DIR"
+HOME_REAL=$(cd "$HOME" 2>/dev/null && pwd -P) || HOME_REAL="$HOME"
+case "$REAL" in ""|/|/bin|/boot|/dev|/etc|/home|/lib|/lib64|/media|/mnt|/opt|/proc|/root|/run|/sbin|/srv|/sys|/tmp|/usr|/var) fail "unsafe folder '$REAL'";; esac
+case "$HOME_REAL/" in "$REAL"/*) fail "'$REAL' is or contains your home folder";; esac
+[ -f "$REAL/install.sh" ] && [ -f "$REAL/docker-compose.yml" ] && [ -d "$REAL/runtime" ] || fail "$REAL does not look like a Dune Docker folder"
+cd "$REAL"
 echo '> stopping the battlegroup'
 dgrp runtime/scripts/dune stop || true
 echo '> removing containers and volumes'
 dgrp docker compose -f docker-compose.web.yml down -v || true
 dgrp docker compose down -v || true
-cd "$HOME"
-echo "> deleting $DIR"
-rm -rf "$DIR" 2>/dev/null || sudo -n rm -rf "$DIR" || fail "could not delete $DIR (permissions?)"
+cd "$HOME_REAL"
+echo "> deleting $REAL"
+rm -rf -- "$REAL" 2>/dev/null || sudo -n rm -rf -- "$REAL" || fail "could not delete $REAL (permissions?)"
 echo "Dune Docker was removed."
 `, dir))
 }

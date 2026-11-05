@@ -1,14 +1,14 @@
 # Roadmap
 
-* End-to-end validation on Ubuntu 22.04/24.04 (SSH + local), Windows 11 + WSL2, macOS -> remote.
-* Calibrate the RAM heuristic with real `dune memory status` data.
-* Verify the per-Sietch PvP/PvE selectors against a running game; promote from *experimental*.
-* Pin upstream release (`DUNE_RELEASE_SHA256`, tag selection) instead of "latest".
-* SSH keyboard-interactive and jump-host support.
-* Verify the Windows `.exe` icon/version resources in the first release that contains them.
-* More design polish: animated sandworm/ornithopter motifs, sound (optional), light theme, high-DPI checks on real machines.
-* Signed installers (MSI, notarised `.app`/dmg, AppImage); Linux arm64 build; per-OS native look polish.
-* Verify WSL2 provisioning (UAC, reboot handling) on real Windows 10/11 machines.
-* Resume-after-failure state, import of an existing install, Linux distro matrix in CI.
-* Optional step for the Hyper-V Director travel-fix repository for Funcom's official Hyper-V servers.
-* Localisation (English only for now).
+Done in 0.0.4: detached/resumable install, pinned upstream, firewall helper, management actions, Hyper-V fix, finish page, SSH config/known_hosts/jump host/Windows agent, effects switch, controller and SSH tests, fuzzing, release automation.
+
+## Next
+
+* **End-to-end validation** on real servers (Ubuntu 22.04/24.04 over SSH, local Windows 11 + WSL2) and on real Windows/macOS machines (HiDPI, WSL provisioning, `.icns`, exe icon). A Docker-based sshd integration test in CI.
+* **Calibrate the RAM heuristic** with real `dune memory status` data; "use recommended layout" button.
+* **Verify per-Sietch PvP/PvE** in game and drop the "experimental" label; show the existing Deep Desert role.
+* **SHA-256 for the pinned release** (run `scripts/update-upstream-pin.sh` on a machine with GitHub access and commit).
+* **Signing:** Windows certificate, Apple Developer ID + notarisation; Linux arm64 build.
+* Copy-log/save-log and "report a problem" with a pre-filled issue; accessibility (keyboard order, font size, contrast); window size memory; a German translation.
+* Pageant support, more than one jump host, adding trusted keys to `known_hosts`.
+* Optional: native per-OS UIs on top of the same controller.

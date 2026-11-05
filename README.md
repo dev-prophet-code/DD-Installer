@@ -8,29 +8,36 @@ Native desktop installer for **[Dune: Awakening Docker](https://github.com/Red-B
 
 One real application per operating system - **Windows, macOS, Linux** - with a native window (no web interface, no browser). It installs the server either on **this computer** or on a **remote Linux server over SSH**, creates your Sietches and Deep Desert layout, and tunes the setup to the machine.
 
-> **Status: alpha (`0.0.3-alpha`).** The core logic is implemented and unit-tested. It has **not yet been tested end to end** on real servers or on real Windows/macOS machines. Expect rough edges. See the [roadmap](docs/ROADMAP.md) and the [changelog](CHANGELOG.md).
+> **Status: alpha (`0.0.4-alpha`).** The core logic is implemented and unit-tested. It has **not yet been tested end to end** on real servers or on real Windows/macOS machines. Expect rough edges. See the [roadmap](docs/ROADMAP.md) and the [changelog](CHANGELOG.md).
 
 > **Disclaimer.** Unofficial community tool, not affiliated with Funcom or RedBlink. DD-Installer **does not store your credentials** (SSH password, key passphrase and Funcom token stay in memory for the session only). **Neither RedBlink (author of Dune: Awakening Docker) nor Prophet (author of DD-Installer) can be held liable** for any damage. Full text: [docs/DISCLAIMER.md](docs/DISCLAIMER.md). The app asks you to accept it before installing.
 
 ## Screenshots
 
 <p align="center">
+  <img src="docs/images/demo.gif" alt="Animated demo: drifting sand, glowing title and page transitions" width="70%">
+</p>
+<p align="center">
+  <img src="docs/images/00-welcome.png" alt="Welcome: what you need and what will happen" width="49%">
   <img src="docs/images/01-target.png" alt="Step 1: choose the target - this computer or a remote Linux server over SSH" width="49%">
+</p>
+<p align="center">
   <img src="docs/images/02-server.png" alt="Step 2: server title, region, web console port and Funcom token" width="49%">
-</p>
-<p align="center">
   <img src="docs/images/03-layout.png" alt="Step 3: name your Sietches, set PvE or PvP and choose the Deep Desert layout" width="49%">
-  <img src="docs/images/04-scan.png" alt="Step 4: system scan with RAM, CPU and disk analysis and tuning" width="49%">
 </p>
 <p align="center">
-  <img src="docs/images/05-install.png" alt="Step 5: installation with live progress, log and the problem-solving assistant" width="49%">
+  <img src="docs/images/04-scan.png" alt="Step 4: system scan with RAM, CPU and disk analysis, tuning and firewall options" width="49%">
+  <img src="docs/images/05-install.png" alt="Step 5: installation with progress bars, live log and the problem-solving assistant" width="49%">
+</p>
+<p align="center">
+  <img src="docs/images/05b-finish.png" alt="Finish: web console address, admin password and port checklist" width="49%">
   <img src="docs/images/06-ssh-key.png" alt="Built-in SSH key helper with copy-paste commands for your system" width="49%">
 </p>
 <p align="center">
   <img src="docs/images/07-wsl.png" alt="Windows: the installer offers to install WSL2 and Ubuntu if they are missing" width="49%">
 </p>
 
-*The screenshots show the five steps of the wizard with example data (no real server). The sand, glow and sandstorm effects are animated in the real application.*
+*The screenshots show the wizard with example data (no real server). The sand, glow and sandstorm effects are animated in the real application and can be switched off.*
 
 ## Download
 
@@ -51,12 +58,17 @@ Verify the download with `SHA256SUMS`. The programs are **not code-signed yet**,
 |---|---|
 | **Two targets** | *This computer*: Linux natively, Windows via WSL2. *Remote server*: SSH with key, password or ssh-agent and a confirmed host-key fingerprint. macOS can only use the remote target. |
 | **WSL2 on Windows** | Checks for WSL2 and Ubuntu. If missing, it offers to install them (administrator prompt), prepares a user, enables systemd and continues the setup. A Windows restart may be required. |
+| **Safe, resumable install** | The long steps run **on the server**; a dropped connection or a closed window does not stop them. Press Install again to continue where it stopped. Your computer is kept awake meanwhile. |
+| **Tested version** | Installs the Dune Docker release DD-Installer was tested with (pinned), newest upstream on request. |
 | **Sietches** | Choose how many Hagga Basin Sietches to create, name each one and set it to PvE or PvP (per-Sietch ruleset is *experimental*). |
 | **Deep Desert** | 1-3 instances. Upstream rules apply: the first instance keeps its existing ruleset, the second gets the opposite, only the third is selectable. |
 | **System scan and tuning** | Probes CPU (AVX2), RAM, swap, disk, Docker, sudo, ports and WSL; blocks impossible setups; recommends a layout and tuning (PostgreSQL, RabbitMQ, swap, `.wslconfig`). |
 | **Problem-solving assistant** | If a step fails, the error is matched against rules built from the official documentation. Safe fixes run automatically, risky ones need your approval, nothing destructive is ever done. See [docs/ASSISTANT.md](docs/ASSISTANT.md). |
 | **Dune look and feel** | Arrakis-night design with sand, moons, glow effects and a sandstorm while installing; identical on all systems ([docs/DESIGN.md](docs/DESIGN.md)). |
 | **SSH made easy** | Built-in **Create SSH key** helper and **SSH help**, plus a beginner guide with every command for Windows, macOS and Linux: [docs/SSH-GUIDE.md](docs/SSH-GUIDE.md). |
+| **Firewall helper** | Opens the game ports in an active ufw/firewalld (adds rules only, SSH first) and can restrict the web console to your IP. |
+| **Manage existing servers** | Status, backup, repair, updates, restart, stop and (with typed confirmation) remove. Also the Hyper-V Director travel fix for Funcom's official Hyper-V server. |
+| **Finish page** | Console address with one click, admin password (reveal/copy), port checklist, health check. |
 | **Secret hygiene** | Nothing is written to disk by the installer (except an SSH key pair you explicitly create with the key helper, in your `~/.ssh`); secrets are masked in logs and before the assistant sees any output. |
 
 ## Requirements
@@ -102,7 +114,7 @@ go run ./cmd/dd-installer   # opens the installer window
 
 ## Releases and versions
 
-The version number lives in the [`VERSION`](VERSION) file. Every push to `main` builds all three operating systems and publishes the release `v<VERSION>` (versions with `-alpha`/`-beta` are marked as pre-releases). To publish a new version, change `VERSION`, add a [changelog](CHANGELOG.md) entry and push. Pushing the same version again replaces that release.
+The version number lives in the [`VERSION`](VERSION) file. Every push to `main` builds all three operating systems and publishes or updates the release `v<VERSION>` (versions with `-alpha`/`-beta` are pre-releases); its notes come from [CHANGELOG.md](CHANGELOG.md), and the files carry a build provenance attestation. To publish a new version, change `VERSION`, add a changelog section and push. If the macOS runner was unavailable, run the **Release macOS** workflow to add the macOS build. To update the tested Dune Docker version run `scripts/update-upstream-pin.sh`.
 
 ## Repository layout
 
@@ -117,7 +129,7 @@ scripts/            build helper
 
 ## Documentation
 
-[SSH guide](docs/SSH-GUIDE.md) | [Design](docs/DESIGN.md) | [Feasibility](docs/FEASIBILITY.md) | [Architecture](docs/ARCHITECTURE.md) | [Sizing](docs/SIZING.md) | [Assistant](docs/ASSISTANT.md) | [Security](docs/SECURITY.md) | [Disclaimer](docs/DISCLAIMER.md) | [Roadmap](docs/ROADMAP.md) | [Changelog](CHANGELOG.md)
+Start with the [documentation index](docs/README.md): [FAQ](docs/FAQ.md) | [SSH guide](docs/SSH-GUIDE.md) | [Choosing a server](docs/HOSTING-PROVIDERS.md) | [Router and firewall](docs/ROUTER-AND-FIREWALL.md) | [Troubleshooting](docs/TROUBLESHOOTING.md) | [Security](docs/SECURITY.md) | [Disclaimer](docs/DISCLAIMER.md) | [Architecture](docs/ARCHITECTURE.md) | [Roadmap](docs/ROADMAP.md) | [Changelog](CHANGELOG.md) | [Contributing](CONTRIBUTING.md) | [Security policy](SECURITY.md)
 
 Fonts: Rajdhani and Cinzel Decorative (SIL OFL 1.1), UI toolkit Fyne (BSD-3-Clause). See [docs/DESIGN.md](docs/DESIGN.md).
 

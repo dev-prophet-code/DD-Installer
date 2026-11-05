@@ -22,6 +22,10 @@ The installer is styled to feel at home in the world of **Dune: Awakening**: Arr
 
 The emblem is cut out from the supplied artwork (text removed, transparent background). It is a project logo, not an official Funcom/Dune asset. Source of truth: `internal/ui/assets/logo.png` (the README copy is `docs/images/logo.png`).
 
+## Effects switch
+
+The **Effects: on/off** button (top right) stops every animation timer (sand, glow, glint, page veil) and remembers the choice (the only preference DD-Installer saves). `DD_INSTALLER_NO_EFFECTS=1` starts without effects.
+
 ## Changing the look
 
 * Colours and sizes: `internal/ui/theme.go`.

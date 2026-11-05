@@ -17,7 +17,7 @@ import (
 func heading(text string, size float32) *canvas.Text {
 	t := canvas.NewText(text, colGold)
 	t.TextSize = size
-	t.TextStyle = fyne.TextStyle{Monospace: true} // mapped to the heading font by duneTheme
+	t.TextStyle = fyne.TextStyle{Italic: true} // mapped to the heading font by duneTheme
 	return t
 }
 
@@ -54,6 +54,7 @@ type motes struct {
 	size  fyne.Size
 	speed float32
 	last  time.Time
+	anim  *fyne.Animation
 }
 
 type moteLayout struct{ m *motes }
@@ -83,10 +84,26 @@ func newMotes(n int) *motes {
 
 func (m *motes) start() {
 	m.last = time.Now()
-	a := fyne.NewAnimation(time.Second, func(float32) { m.step() })
-	a.RepeatCount = fyne.AnimationRepeatForever
-	a.Curve = fyne.AnimationLinear
-	a.Start()
+	m.anim = fyne.NewAnimation(time.Second, func(float32) { m.step() })
+	m.anim.RepeatCount = fyne.AnimationRepeatForever
+	m.anim.Curve = fyne.AnimationLinear
+	m.anim.Start()
+}
+
+// setOn shows and animates the sand, or hides it and stops all work.
+func (m *motes) setOn(on bool) {
+	if on {
+		m.box.Show()
+		m.last = time.Now()
+		if m.anim != nil {
+			m.anim.Start()
+		}
+		return
+	}
+	if m.anim != nil {
+		m.anim.Stop()
+	}
+	m.box.Hide()
 }
 
 func (m *motes) step() {
@@ -147,23 +164,47 @@ func (l *shimmerLayout) Layout(objs []fyne.CanvasObject, s fyne.Size) {
 }
 func (l *shimmerLayout) MinSize([]fyne.CanvasObject) fyne.Size { return fyne.NewSize(10, 6) }
 
-// newShimmer is a thin line with a bright glint that travels along it.
-func newShimmer() fyne.CanvasObject {
+// shimmer is a thin line with a bright glint that travels along it.
+type shimmer struct {
+	obj  fyne.CanvasObject
+	anim *fyne.Animation
+	l    *shimmerLayout
+}
+
+func newShimmer() *shimmer {
 	base := canvas.NewRectangle(colLine)
 	left := canvas.NewHorizontalGradient(color.NRGBA{R: 0xf3, G: 0xb9, B: 0x4d, A: 0}, color.NRGBA{R: 0xf3, G: 0xb9, B: 0x4d, A: 0xf0})
 	right := canvas.NewHorizontalGradient(color.NRGBA{R: 0xf3, G: 0xb9, B: 0x4d, A: 0xf0}, color.NRGBA{R: 0xf3, G: 0xb9, B: 0x4d, A: 0})
 	glow := container.NewGridWithColumns(2, left, right)
 	l := &shimmerLayout{}
 	c := container.New(l, base, glow)
-	a := fyne.NewAnimation(4200*time.Millisecond, func(p float32) { l.t = p; c.Refresh() })
-	a.RepeatCount = fyne.AnimationRepeatForever
-	a.Curve = fyne.AnimationEaseInOut
-	a.Start()
-	return c
+	sh := &shimmer{obj: c, l: l}
+	sh.anim = fyne.NewAnimation(4200*time.Millisecond, func(p float32) { l.t = p; c.Refresh() })
+	sh.anim.RepeatCount = fyne.AnimationRepeatForever
+	sh.anim.Curve = fyne.AnimationEaseInOut
+	sh.anim.Start()
+	return sh
 }
 
-// pulse slowly breathes a text colour between two tones (spice glow).
-func pulse(t *canvas.Text, from, to color.Color) {
+func (sh *shimmer) setOn(on bool) {
+	if on {
+		sh.anim.Start()
+		return
+	}
+	sh.anim.Stop()
+	sh.l.t = -1 // glint parked off-screen
+	sh.obj.Refresh()
+}
+
+// pulser slowly breathes a text colour between two tones (spice glow).
+type pulser struct {
+	anim *fyne.Animation
+	t    *canvas.Text
+	rest color.Color
+}
+
+func newPulse(t *canvas.Text, from, to color.Color) *pulser {
+	p := &pulser{t: t, rest: to}
 	a := canvas.NewColorRGBAAnimation(from, to, 2400*time.Millisecond, func(c color.Color) {
 		t.Color = c
 		t.Refresh()
@@ -172,18 +213,36 @@ func pulse(t *canvas.Text, from, to color.Color) {
 	a.RepeatCount = fyne.AnimationRepeatForever
 	a.Curve = fyne.AnimationEaseInOut
 	a.Start()
+	p.anim = a
+	return p
+}
+
+func (p *pulser) setOn(on bool) {
+	if on {
+		p.anim.Start()
+		return
+	}
+	p.anim.Stop()
+	p.t.Color = p.rest
+	p.t.Refresh()
 }
 
 // ---------------------------------------------------------------- transitions
 
 // flasher draws a dark veil that fades away: used when a page changes.
-type flasher struct{ rect *canvas.Rectangle }
+type flasher struct {
+	rect *canvas.Rectangle
+	on   bool
+}
 
 func newFlasher() *flasher {
-	return &flasher{rect: canvas.NewRectangle(color.NRGBA{A: 0})}
+	return &flasher{rect: canvas.NewRectangle(color.NRGBA{A: 0}), on: true}
 }
 
 func (f *flasher) flash() {
+	if !f.on {
+		return
+	}
 	a := canvas.NewColorRGBAAnimation(color.NRGBA{R: 0x1a, G: 0x0c, B: 0x04, A: 215}, color.NRGBA{R: 0x1a, G: 0x0c, B: 0x04, A: 0}, 420*time.Millisecond, func(c color.Color) {
 		f.rect.FillColor = c
 		f.rect.Refresh()

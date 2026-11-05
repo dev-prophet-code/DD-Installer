@@ -355,3 +355,42 @@ func (c *Controller) RunAction(ctx context.Context, r Request, id, phrase string
 	defer run.Close()
 	return install.StreamScript(ctx, run, a.Script(cfg), log, cfg.SSH.Password, cfg.SSH.Passphrase, cfg.FuncomToken)
 }
+
+// FinishInfo is what the final page shows after a successful installation.
+type FinishInfo struct {
+	URL      string // address of the web console as seen from this computer
+	Password string // generated admin password (read from the server, shown once)
+	Port     int
+}
+
+// FinishInfo reads the generated admin password from the target and builds the
+// console address. The password is returned to the caller only; it is never
+// logged or stored.
+func (c *Controller) FinishInfo(ctx context.Context, r Request, port int) (FinishInfo, error) {
+	cfg := r.Cfg()
+	if port < 1 || port > 65535 {
+		port = cfg.WebPort
+	}
+	run, err := c.connect(ctx, cfg)
+	if err != nil {
+		return FinishInfo{}, errors.New(Sanitize(err.Error(), cfg))
+	}
+	defer run.Close()
+	file := install.DirExpr(cfg) + "/runtime/secrets/admin-web-password.txt"
+	out, code, err := transport.Capture(ctx, run, fmt.Sprintf("cat \"%[1]s\" 2>/dev/null || sudo -n cat \"%[1]s\" 2>/dev/null\n", file))
+	if err != nil || code != 0 {
+		return FinishInfo{Port: port, URL: consoleURL(cfg, port)}, errors.New("the admin password file could not be read; look at runtime/secrets/admin-web-password.txt on the server")
+	}
+	return FinishInfo{URL: consoleURL(cfg, port), Port: port, Password: strings.TrimSpace(out)}, nil
+}
+
+func consoleURL(cfg model.Config, port int) string {
+	host := "localhost"
+	if cfg.Target == model.TargetSSH {
+		host = cfg.SSH.Host
+		if strings.Contains(host, ":") && !strings.HasPrefix(host, "[") {
+			host = "[" + host + "]"
+		}
+	}
+	return fmt.Sprintf("http://%s:%d", host, port)
+}

@@ -18,6 +18,8 @@ var (
 	//go:embed assets/fonts/CinzelDecorative-Bold.ttf
 	cinzelBold []byte
 
+	//go:embed assets/fonts/ShareTechMono-Regular.ttf
+	shareTechMono []byte
 	//go:embed assets/logo.png
 	logoPNG []byte
 
@@ -25,6 +27,7 @@ var (
 
 	fontBody    = fyne.NewStaticResource("Rajdhani-Regular.ttf", rajdhaniRegular)
 	fontBodyB   = fyne.NewStaticResource("Rajdhani-Bold.ttf", rajdhaniBold)
+	fontMono    = fyne.NewStaticResource("ShareTechMono-Regular.ttf", shareTechMono)
 	fontHeading = fyne.NewStaticResource("CinzelDecorative-Bold.ttf", cinzelBold)
 )
 
@@ -104,8 +107,10 @@ func (duneTheme) Color(n fyne.ThemeColorName, _ fyne.ThemeVariant) color.Color {
 
 func (duneTheme) Font(s fyne.TextStyle) fyne.Resource {
 	switch {
-	case s.Monospace: // repurposed: headings (we never need a monospace face)
+	case s.Italic: // repurposed: headings (Rajdhani has no italic and the UI never needs one)
 		return fontHeading
+	case s.Monospace:
+		return fontMono
 	case s.Bold:
 		return fontBodyB
 	}

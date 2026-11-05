@@ -3,7 +3,9 @@ package ui
 import (
 	"image/png"
 	"os"
+	"strings"
 	"testing"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
@@ -11,7 +13,6 @@ import (
 	"github.com/dev-prophet-code/dd-installer/internal/app"
 	"github.com/dev-prophet-code/dd-installer/internal/assistant"
 	"github.com/dev-prophet-code/dd-installer/internal/install"
-	"github.com/dev-prophet-code/dd-installer/internal/model"
 	"github.com/dev-prophet-code/dd-installer/internal/platform"
 	"github.com/dev-prophet-code/dd-installer/internal/probe"
 	"github.com/dev-prophet-code/dd-installer/internal/sizing"
@@ -46,30 +47,34 @@ func TestShots(t *testing.T) {
 	}
 
 	// 1 target
-	z.target.SetSelected(optSSH)
-	z.host.SetText("203.0.113.10")
-	z.user.SetText("dune")
-	z.key.SetText(`C:\Users\You\.ssh\dd-installer_ed25519`)
+	save("00-welcome")
+	z.show(pgTarget)
+	z.tgt.target.SetSelected(optSSH)
+	z.tgt.host.SetText("203.0.113.10")
+	z.tgt.user.SetText("dune")
+	z.tgt.key.SetText(`C:\Users\You\.ssh\dd-installer_ed25519`)
 	save("01-target")
 
 	// 2 server
-	z.show(1)
-	z.title.SetText("Spice Harvesters EU")
-	z.region.SetSelected("Europe")
-	z.token.SetText("funcom-example-token")
+	z.show(pgServer)
+	z.srv.title.SetText("Spice Harvesters EU")
+	z.srv.region.SetSelected("Europe")
+	z.srv.token.SetText(strings.Repeat("a1B2", 12))
 	save("02-server")
 
 	// 3 layout
-	z.show(2)
-	z.rows[0].name.SetText("Arrakeen Rise")
+	z.show(pgLayout)
+	z.lay.rows[0].name.SetText("Arrakeen Rise")
 	z.addSietch("Harko Outpost", "PVP")
 	z.addSietch("Sietch Tabr", "PVE")
-	z.dd.SetSelected("3")
-	z.dd3.SetSelected("PVP")
+	z.lay.dd.SetSelected("3")
+	z.lay.dd3.SetSelected("PVP")
 	save("03-layout")
 
 	// 4 scan
-	z.show(3)
+	z.show(pgScan)
+	z.scn.firewall.SetChecked(true)
+	z.scn.allowFrom.SetText("203.0.113.0/24")
 	info := probe.Info{OS: "Linux", Arch: "x86_64", Distro: "Ubuntu 24.04 LTS", User: "dune", UID: 1000, CPUModel: "AMD EPYC 7543 32-Core", CPUThreads: 16,
 		AVX: true, AVX2: true, MemTotalKB: 64 * 1024 * 1024, DiskFreeKB: 420 * 1024 * 1024, SwapTotalKB: 0, Systemd: true, Docker: false, Tools: map[string]bool{"curl": true, "tar": true}}
 	cfg := z.request().Cfg()
@@ -77,8 +82,8 @@ func TestShots(t *testing.T) {
 	save("04-scan")
 
 	// 5 install in progress with the assistant at work
-	z.show(4)
-	z.accept.SetChecked(true)
+	z.show(pgInstall)
+	z.ins.accept.SetChecked(true)
 	z.onEvent(install.Event{Type: "step", Step: "bootstrap", Status: "ok", Msg: "Download Dune Docker"})
 	z.onEvent(install.Event{Type: "step", Step: "install", Status: "ok", Msg: "Install Docker & start the Web UI (retry 1)"})
 	z.onEvent(install.Event{Type: "step", Step: "tuning", Status: "ok", Msg: "Apply performance tuning"})
@@ -90,19 +95,33 @@ func TestShots(t *testing.T) {
 	for _, l := range []string{"==> Choosing the Web UI port.", "Port 8088 is already in use. Using available port 8089.", "Server identity saved.", "Funcom token saved.", "Deploying (downloads the game files - this can take a long time)..."} {
 		z.onEvent(install.Event{Type: "log", Msg: l})
 	}
+	z.onEvent(install.Event{Type: "log", Msg: "Update state (0x61) downloading, progress: 63.40 (1740 / 2735)"})
 	z.mote.setStorm(true)
+	z.ins.sumAcc.Close(0)
+	z.renderLog()
 	save("05-install")
 	z.mote.setStorm(false)
 
-	// 6 SSH key helper
-	z.show(0)
+	// 6 finish
+	z.ins.port = 8088
+	z.showFinish()
+	z.fin.password = "k7Qm-Example-Pw"
+	z.fin.reveal.SetChecked(true)
+	time.Sleep(400 * time.Millisecond) // let the (failing) background lookup finish, then show clean demo data
+	z.fin.status.SetText("The installation finished. Sietches, Deep Desert and tuning have been applied. Keep this window open until you have noted the password below.")
+	z.fin.url = "http://203.0.113.10:8088"
+	z.fin.urlLink.SetText(z.fin.url)
+	save("05b-finish")
+
+	// 7 SSH key helper
+	z.show(pgTarget)
 	z.showKeyCreated(sshkey.Result{PrivatePath: `C:\Users\You\.ssh\dd-installer_ed25519`, PublicKey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample dd-installer", Fingerprint: "SHA256:Qk3x0Example"})
 	save("06-ssh-key")
 
 	// 7 WSL offer on a fresh Windows
-	_ = model.Default
 	z2 := newTest(t, &fakePF{id: "windows", name: "Windows", ls: platform.LocalSupport{Reason: "No Ubuntu WSL2 distribution found.", CanProvision: true, ProvisionHint: "x"}})
-	z2.target.SetSelected(optLocal)
+	z2.show(pgTarget)
+	z2.tgt.target.SetSelected(optLocal)
 	z2.w.Resize(size)
 	c2 := z2.w.Canvas().(test.WindowlessCanvas)
 	c2.Resize(fyne.NewSize(1021, 821))

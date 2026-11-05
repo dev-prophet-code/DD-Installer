@@ -1,10 +1,10 @@
 module github.com/dev-prophet-code/dd-installer
 
-go 1.24
+go 1.26.0
 
 require (
 	fyne.io/fyne/v2 v2.6.3
-	golang.org/x/crypto v0.33.0
+	golang.org/x/crypto v0.58.0
 )
 
 require (
@@ -36,8 +36,8 @@ require (
 	github.com/stretchr/testify v1.10.0 // indirect
 	github.com/yuin/goldmark v1.7.8 // indirect
 	golang.org/x/image v0.24.0 // indirect
-	golang.org/x/net v0.35.0 // indirect
-	golang.org/x/sys v0.30.0 // indirect
-	golang.org/x/text v0.22.0 // indirect
+	golang.org/x/net v0.60.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

@@ -80,13 +80,13 @@ func (c *Controller) Platform() platform.Platform { return c.pf }
 func (c *Controller) Validate(r Request) []string { cfg := r.Cfg(); return cfg.Validate() }
 
 // HostKey fetches the SSH host-key fingerprint for confirmation.
-func (c *Controller) HostKey(ctx context.Context, host string, port int) (string, error) {
-	if strings.TrimSpace(host) == "" || port < 1 || port > 65535 {
+func (c *Controller) HostKey(ctx context.Context, cfg model.SSHConfig) (string, error) {
+	if strings.TrimSpace(cfg.Host) == "" || cfg.Port < 1 || cfg.Port > 65535 {
 		return "", errors.New("host and port required")
 	}
-	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	return transport.ScanHostKey(ctx, host, port)
+	return transport.ScanHostKey(ctx, cfg)
 }
 
 func (c *Controller) connect(ctx context.Context, cfg model.Config) (transport.Runner, error) {

@@ -47,6 +47,9 @@ type SSHConfig struct {
 	// HostKeyFingerprint is the SHA256 fingerprint the user confirmed
 	// (trust on first use). Connections fail if the server presents another.
 	HostKeyFingerprint string `json:"hostKeyFingerprint,omitempty"`
+	// Jump is an optional single ProxyJump hop: "[user@]host[:port]". The jump
+	// host must already be in ~/.ssh/known_hosts.
+	Jump string `json:"jump,omitempty"`
 }
 
 // Sietch is one Hagga Basin instance.
@@ -97,6 +100,8 @@ var Regions = []string{"Europe", "North America", "South America", "Asia", "Ocea
 // the installer is deliberately conservative.
 var nameRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9 _-]{0,31}$`)
 
+var jumpRe = regexp.MustCompile(`^([A-Za-z0-9._-]+@)?[A-Za-z0-9._-]+(:[0-9]{1,5})?$`)
+
 var distroRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
 
 const MaxSietches = 8 // installer-side sanity cap; real limit is host memory
@@ -133,6 +138,9 @@ func (c *Config) Validate() []string {
 		}
 		if c.SSH.User == "root" {
 			add("ssh: Dune Docker refuses to install as root; use a regular user with sudo")
+		}
+		if j := strings.TrimSpace(c.SSH.Jump); j != "" && !jumpRe.MatchString(j) {
+			add("ssh: jump host must look like user@host or user@host:port (one hop)")
 		}
 		switch c.SSH.Auth {
 		case AuthKey:

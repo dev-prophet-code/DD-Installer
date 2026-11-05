@@ -7,47 +7,233 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
+	"golang.org/x/crypto/ssh/knownhosts"
 
 	"github.com/dev-prophet-code/dd-installer/internal/model"
 )
 
-// HostKeyError is returned when the server key has not been confirmed yet.
-// The UI shows Fingerprint to the user; once accepted it is stored in
-// SSHConfig.HostKeyFingerprint and the connection is retried.
+// HostKeyError is returned when the server key has not been confirmed yet or
+// does not match. The UI shows Fingerprint to the user; once accepted it is
+// stored in SSHConfig.HostKeyFingerprint and the connection is retried.
 type HostKeyError struct {
 	Fingerprint string
-	Mismatch    bool // true: a different key than the confirmed one
+	Mismatch    bool   // a different key than the confirmed / known one
+	Source      string // "known_hosts" when the conflict comes from ~/.ssh/known_hosts
+	Jump        bool   // the jump host, not the target
 }
 
 func (e *HostKeyError) Error() string {
-	if e.Mismatch {
-		return "SSH host key changed: expected the confirmed fingerprint, got " + e.Fingerprint
+	who := "SSH host key"
+	if e.Jump {
+		who = "SSH jump host key"
 	}
-	return "SSH host key not yet confirmed: " + e.Fingerprint
+	switch {
+	case e.Mismatch && e.Source == "known_hosts":
+		return who + " CHANGED compared to ~/.ssh/known_hosts: " + e.Fingerprint
+	case e.Mismatch:
+		return who + " changed: expected the confirmed fingerprint, got " + e.Fingerprint
+	}
+	return who + " not yet confirmed: " + e.Fingerprint
 }
 
 // SSH is a Runner over an SSH connection.
 type SSH struct {
-	cfg    model.SSHConfig
-	client *ssh.Client
+	cfg     model.SSHConfig
+	client  *ssh.Client
+	jump    *ssh.Client // set when the connection goes through a jump host
+	closers []io.Closer
 }
 
-// ScanHostKey connects only to read the server's host key fingerprint.
-func ScanHostKey(ctx context.Context, host string, port int) (string, error) {
-	var fp string
-	d := &net.Dialer{Timeout: 10 * time.Second}
-	conn, err := d.DialContext(ctx, "tcp", net.JoinHostPort(host, strconv.Itoa(port)))
+// knownHostsPath is overridable for tests.
+var knownHostsPath = func() string {
+	h, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(h, ".ssh", "known_hosts")
+}
+
+// loadKnownHosts returns a callback for ~/.ssh/known_hosts, or nil when the
+// file is missing or unreadable (the user is then asked to confirm instead).
+func loadKnownHosts() ssh.HostKeyCallback {
+	p := knownHostsPath()
+	if p == "" {
+		return nil
+	}
+	if _, err := os.Stat(p); err != nil {
+		return nil
+	}
+	cb, err := knownhosts.New(p)
+	if err != nil {
+		return nil
+	}
+	return cb
+}
+
+// policy decides whether a host key is acceptable.
+//
+//  1. a matching entry in ~/.ssh/known_hosts is trusted;
+//  2. a conflicting entry there is an error (possible interception);
+//  3. otherwise the fingerprint the user confirmed in this session must match
+//     (trust on first use, never silent). requireKnown (jump hosts) forbids 3.
+type policy struct {
+	pinned       string
+	known        ssh.HostKeyCallback
+	requireKnown bool
+	jump         bool
+	seen         string
+}
+
+func (p *policy) check(hostname string, remote net.Addr, key ssh.PublicKey) error {
+	fp := ssh.FingerprintSHA256(key)
+	p.seen = fp
+	if p.known != nil {
+		err := p.known(hostname, remote, key)
+		if err == nil {
+			return nil
+		}
+		var ke *knownhosts.KeyError
+		if errors.As(err, &ke) && len(ke.Want) > 0 {
+			return &HostKeyError{Fingerprint: fp, Mismatch: true, Source: "known_hosts", Jump: p.jump}
+		}
+	}
+	if p.requireKnown {
+		return fmt.Errorf("the jump host is not in ~/.ssh/known_hosts. Connect to it once with `ssh` in a terminal to trust it (fingerprint %s)", fp)
+	}
+	if p.pinned == "" {
+		return &HostKeyError{Fingerprint: fp, Jump: p.jump}
+	}
+	if fp != p.pinned {
+		return &HostKeyError{Fingerprint: fp, Mismatch: true, Jump: p.jump}
+	}
+	return nil
+}
+
+func hostAddr(host string, port int) string {
+	if port == 0 {
+		port = 22
+	}
+	return net.JoinHostPort(host, strconv.Itoa(port))
+}
+
+// ParseJump splits "[user@]host[:port]" (OpenSSH ProxyJump syntax, one hop).
+func ParseJump(j string, defUser string) (user, host string, port int, err error) {
+	j = strings.TrimSpace(j)
+	if j == "" || strings.Contains(j, ",") {
+		return "", "", 0, errors.New("only a single jump host is supported (user@host[:port])")
+	}
+	user = defUser
+	if i := strings.LastIndex(j, "@"); i >= 0 {
+		user, j = j[:i], j[i+1:]
+	}
+	port = 22
+	if h, p, e := net.SplitHostPort(j); e == nil {
+		n, e2 := strconv.Atoi(p)
+		if e2 != nil || n < 1 || n > 65535 {
+			return "", "", 0, errors.New("invalid jump host port")
+		}
+		host, port = h, n
+	} else {
+		host = strings.Trim(j, "[]")
+	}
+	if host == "" || user == "" {
+		return "", "", 0, errors.New("the jump host needs a host and a user (user@host[:port])")
+	}
+	return user, host, port, nil
+}
+
+// connect opens an SSH client connection to cfg, going through cfg.Jump when set.
+func connect(ctx context.Context, cfg model.SSHConfig, pol *policy) (client, jump *ssh.Client, err error) {
+	auth, closeAgent, err := authMethods(cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+	if closeAgent != nil {
+		defer closeAgent()
+	}
+	addr := hostAddr(cfg.Host, cfg.Port)
+	var conn net.Conn
+	if cfg.Jump != "" {
+		ju, jh, jp, perr := ParseJump(cfg.Jump, cfg.User)
+		if perr != nil {
+			return nil, nil, perr
+		}
+		jcfg := cfg
+		jcfg.Jump, jcfg.User, jcfg.Host, jcfg.Port, jcfg.HostKeyFingerprint = "", ju, jh, jp, ""
+		jpol := &policy{known: loadKnownHosts(), requireKnown: true, jump: true}
+		jclient, _, jerr := connect(ctx, jcfg, jpol)
+		if jerr != nil {
+			return nil, nil, fmt.Errorf("jump host %s: %w", hostAddr(jh, jp), jerr)
+		}
+		conn, err = jclient.Dial("tcp", addr)
+		if err != nil {
+			jclient.Close()
+			return nil, nil, fmt.Errorf("jump host cannot reach %s: %w", addr, err)
+		}
+		jump = jclient
+	} else {
+		d := &net.Dialer{Timeout: 15 * time.Second}
+		conn, err = d.DialContext(ctx, "tcp", addr)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	cc := &ssh.ClientConfig{User: cfg.User, Auth: auth, HostKeyCallback: pol.check, Timeout: 15 * time.Second}
+	sc, chans, reqs, err := ssh.NewClientConn(conn, addr, cc)
+	if err != nil {
+		conn.Close()
+		if jump != nil {
+			jump.Close()
+		}
+		var hk *HostKeyError
+		if errors.As(err, &hk) {
+			return nil, nil, hk
+		}
+		if pol.seen != "" && pol.pinned == "" && !pol.requireKnown {
+			return nil, nil, &HostKeyError{Fingerprint: pol.seen, Jump: pol.jump}
+		}
+		return nil, nil, fmt.Errorf("ssh connect %s: %w", addr, err)
+	}
+	return ssh.NewClient(sc, chans, reqs), jump, nil
+}
+
+// ScanHostKey connects only to read the server's host key fingerprint (through
+// the jump host if configured). It never authenticates.
+func ScanHostKey(ctx context.Context, cfg model.SSHConfig) (string, error) {
+	var jump *ssh.Client
+	var conn net.Conn
+	var err error
+	addr := hostAddr(cfg.Host, cfg.Port)
+	if cfg.Jump != "" {
+		ju, jh, jp, perr := ParseJump(cfg.Jump, cfg.User)
+		if perr != nil {
+			return "", perr
+		}
+		jcfg := cfg
+		jcfg.Jump, jcfg.User, jcfg.Host, jcfg.Port = "", ju, jh, jp
+		jclient, _, jerr := connect(ctx, jcfg, &policy{known: loadKnownHosts(), requireKnown: true, jump: true})
+		if jerr != nil {
+			return "", fmt.Errorf("jump host: %w", jerr)
+		}
+		jump = jclient
+		defer jump.Close()
+		conn, err = jump.Dial("tcp", addr)
+	} else {
+		conn, err = (&net.Dialer{Timeout: 10 * time.Second}).DialContext(ctx, "tcp", addr)
+	}
 	if err != nil {
 		return "", err
 	}
 	defer conn.Close()
-	sc, _, _, err := ssh.NewClientConn(conn, host, &ssh.ClientConfig{
+	var fp string
+	sc, _, _, err := ssh.NewClientConn(conn, addr, &ssh.ClientConfig{
 		User: "dd-installer-probe",
 		HostKeyCallback: func(_ string, _ net.Addr, k ssh.PublicKey) error {
 			fp = ssh.FingerprintSHA256(k)
@@ -64,68 +250,39 @@ func ScanHostKey(ctx context.Context, host string, port int) (string, error) {
 	return "", err
 }
 
-// DialSSH opens a connection using cfg. The host key must match
-// cfg.HostKeyFingerprint; if empty a *HostKeyError is returned so the caller
-// can ask the user to confirm it (trust on first use, never silent).
+// DialSSH opens a connection using cfg. The host key must be known
+// (~/.ssh/known_hosts) or match cfg.HostKeyFingerprint; otherwise a
+// *HostKeyError is returned so the caller can ask the user to confirm it.
 func DialSSH(ctx context.Context, cfg model.SSHConfig) (*SSH, error) {
-	auth, closeAgent, err := authMethods(cfg)
+	pol := &policy{pinned: cfg.HostKeyFingerprint, known: loadKnownHosts()}
+	client, jump, err := connect(ctx, cfg, pol)
 	if err != nil {
 		return nil, err
 	}
-	if closeAgent != nil {
-		defer closeAgent()
-	}
-	var seen string
-	cc := &ssh.ClientConfig{
-		User: cfg.User,
-		Auth: auth,
-		HostKeyCallback: func(_ string, _ net.Addr, k ssh.PublicKey) error {
-			seen = ssh.FingerprintSHA256(k)
-			if cfg.HostKeyFingerprint == "" {
-				return &HostKeyError{Fingerprint: seen}
-			}
-			if seen != cfg.HostKeyFingerprint {
-				return &HostKeyError{Fingerprint: seen, Mismatch: true}
-			}
-			return nil
-		},
-		Timeout: 15 * time.Second,
-	}
-	addr := net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port))
-	d := &net.Dialer{Timeout: 15 * time.Second}
-	conn, err := d.DialContext(ctx, "tcp", addr)
-	if err != nil {
-		return nil, err
-	}
-	sc, chans, reqs, err := ssh.NewClientConn(conn, addr, cc)
-	if err != nil {
-		conn.Close()
-		var hk *HostKeyError
-		if errors.As(err, &hk) {
-			return nil, hk
-		}
-		if seen != "" && cfg.HostKeyFingerprint == "" {
-			return nil, &HostKeyError{Fingerprint: seen}
-		}
-		return nil, fmt.Errorf("ssh connect %s: %w", addr, err)
-	}
-	return &SSH{cfg: cfg, client: ssh.NewClient(sc, chans, reqs)}, nil
+	return &SSH{cfg: cfg, client: client, jump: jump}, nil
 }
 
 func authMethods(cfg model.SSHConfig) ([]ssh.AuthMethod, func(), error) {
 	switch cfg.Auth {
 	case model.AuthPassword:
-		return []ssh.AuthMethod{ssh.Password(cfg.Password)}, nil, nil
+		pw := cfg.Password
+		return []ssh.AuthMethod{
+			ssh.Password(pw),
+			// many servers only offer PAM "keyboard-interactive" for passwords
+			ssh.KeyboardInteractive(func(_, _ string, questions []string, _ []bool) ([]string, error) {
+				answers := make([]string, len(questions))
+				for i := range answers {
+					answers[i] = pw
+				}
+				return answers, nil
+			}),
+		}, nil, nil
 	case model.AuthAgent:
-		sock := os.Getenv("SSH_AUTH_SOCK")
-		if sock == "" {
-			return nil, nil, errors.New("SSH_AUTH_SOCK is not set; no ssh-agent available")
-		}
-		c, err := net.Dial("unix", sock)
+		rw, err := dialAgent()
 		if err != nil {
-			return nil, nil, fmt.Errorf("ssh-agent: %w", err)
+			return nil, nil, err
 		}
-		return []ssh.AuthMethod{ssh.PublicKeysCallback(agent.NewClient(c).Signers)}, func() { c.Close() }, nil
+		return []ssh.AuthMethod{ssh.PublicKeysCallback(agent.NewClient(rw).Signers)}, func() { rw.Close() }, nil
 	case model.AuthKey:
 		pem, err := os.ReadFile(expandHome(cfg.KeyPath))
 		if err != nil {
@@ -150,18 +307,29 @@ func authMethods(cfg model.SSHConfig) ([]ssh.AuthMethod, func(), error) {
 }
 
 func expandHome(p string) string {
-	if strings.HasPrefix(p, "~/") {
+	if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, `~\`) {
 		if h, err := os.UserHomeDir(); err == nil {
-			return h + p[1:]
+			return filepath.Join(h, p[2:])
 		}
 	}
 	return p
 }
 
 func (s *SSH) Describe() string {
-	return fmt.Sprintf("%s@%s:%d", s.cfg.User, s.cfg.Host, s.cfg.Port)
+	d := fmt.Sprintf("%s@%s:%d", s.cfg.User, s.cfg.Host, s.cfg.Port)
+	if s.cfg.Jump != "" {
+		d += " via " + s.cfg.Jump
+	}
+	return d
 }
-func (s *SSH) Close() error { return s.client.Close() }
+
+func (s *SSH) Close() error {
+	err := s.client.Close()
+	if s.jump != nil {
+		_ = s.jump.Close()
+	}
+	return err
+}
 
 func (s *SSH) Run(ctx context.Context, script string, out io.Writer) (int, error) {
 	sess, err := s.client.NewSession()

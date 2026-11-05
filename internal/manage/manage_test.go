@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -13,6 +14,10 @@ import (
 
 func run(t *testing.T, home, script string) (string, int) {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		// the scripts target Linux servers and use Unix paths; Windows host paths break the shell quoting
+		t.Skip("shell-execution tests of Linux server scripts run on Unix hosts only")
+	}
 	var b strings.Builder
 	code, err := (&transport.Local{Cmd: transport.ShellArgs}).Run(context.Background(), "HOME="+home+"\nexport HOME\n"+script, &b)
 	if err != nil {

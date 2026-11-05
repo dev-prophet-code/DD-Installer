@@ -22,3 +22,14 @@ func TestParseProgress(t *testing.T) {
 		}
 	}
 }
+
+func FuzzParseProgress(f *testing.F) {
+	f.Add("progress: 45.12")
+	f.Add("100%")
+	f.Add("progress: 1e9 %")
+	f.Fuzz(func(t *testing.T, in string) {
+		if pct, ok := parseProgress(in); ok && (pct < 0 || pct > 100) {
+			t.Fatalf("percentage out of range: %v", pct)
+		}
+	})
+}

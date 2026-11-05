@@ -76,16 +76,16 @@ func (z *wizard) showKeyCreator() {
 			dialog.ShowError(err, z.w)
 			return
 		}
-		z.auth.SetSelected(authKey)
-		z.key.SetText(res.PrivatePath)
-		z.phrase.SetText(pass.Text) // convenience for this session only; never written to disk
+		z.tgt.auth.SetSelected(authKey)
+		z.tgt.key.SetText(res.PrivatePath)
+		z.tgt.phrase.SetText(pass.Text) // convenience for this session only; never written to disk
 		z.showKeyCreated(res)
 	}, z.w)
 	d.Show()
 }
 
 func (z *wizard) showKeyCreated(res sshkey.Result) {
-	user, host := strings.TrimSpace(z.user.Text), strings.TrimSpace(z.host.Text)
+	user, host := strings.TrimSpace(z.tgt.user.Text), strings.TrimSpace(z.tgt.host.Text)
 	if user == "" {
 		user = "USER"
 	}

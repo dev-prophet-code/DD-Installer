@@ -30,6 +30,7 @@ type Event struct {
 	Msg       string               `json:"msg,omitempty"`
 	Diagnosis *assistant.Diagnosis `json:"diagnosis,omitempty"`
 	ConfirmID string               `json:"confirmId,omitempty"`
+	Port      int                  `json:"port,omitempty"` // web console port, set on "done"
 }
 
 // Options wires an installation run.
@@ -249,7 +250,7 @@ func Run(ctx context.Context, o Options) error {
 			o.Emit(Event{Type: "step", Step: s.ID, Status: "running", Msg: s.Title + " (retry " + fmt.Sprint(attempts) + ")"})
 		}
 	}
-	o.Emit(Event{Type: "done", Msg: "Installation finished."})
+	o.Emit(Event{Type: "done", Msg: "Installation finished.", Port: st.port})
 	return nil
 }
 

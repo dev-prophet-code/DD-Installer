@@ -76,6 +76,9 @@ type Config struct {
 	FuncomToken string     `json:"-"` // never stored on the client
 	Sietches    []Sietch   `json:"sietches"`
 	DeepDesert  DeepDesert `json:"deepDesert"`
+	// UpstreamLatest installs the newest upstream release instead of the
+	// version DD-Installer was tested with (may be incompatible).
+	UpstreamLatest bool `json:"upstreamLatest"`
 	// ApplyTuning applies the sizing recommendations (swap, balancer, ...).
 	ApplyTuning bool `json:"applyTuning"`
 }
@@ -204,4 +207,29 @@ func (d DeepDesert) DeepDesertRoles() []string {
 		return []string{"existing role", "opposite of the first", string(d.ThirdRole)}
 	}
 	return nil
+}
+
+// CheckToken validates a Funcom self-host token as typed or pasted. The
+// format is not documented, so only clear mistakes are rejected (problem);
+// suspicious values only produce a warning.
+func CheckToken(raw string) (token, problem, warning string) {
+	token = strings.TrimSpace(raw)
+	switch {
+	case token == "":
+		return token, "Enter your Funcom token.", ""
+	case strings.ContainsAny(token, " \t\r\n"):
+		return token, "The token contains spaces or line breaks - paste only the token itself.", ""
+	}
+	for _, r := range token {
+		if r < 0x21 || r > 0x7e {
+			return token, "The token contains characters that cannot be part of a token (non-ASCII or control characters).", ""
+		}
+	}
+	if strings.ContainsAny(token, "\"'`$\\") {
+		return token, "The token contains quotes or other unusual characters - did you copy extra text?", ""
+	}
+	if len(token) < 20 {
+		warning = "The token is unusually short; double-check that you copied all of it."
+	}
+	return token, "", warning
 }

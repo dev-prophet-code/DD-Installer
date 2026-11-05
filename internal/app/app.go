@@ -240,6 +240,10 @@ func (c *Controller) Start(r Request) error {
 			c.mu.Unlock()
 			cancel()
 		}()
+		if c.pf != nil {
+			release := c.pf.PreventSleep()
+			defer release() // the computer may sleep again once the run is over
+		}
 		run, err := c.connect(ctx, cfg)
 		if err != nil {
 			c.emit(install.Event{Type: "error", Msg: Sanitize(err.Error(), cfg)})

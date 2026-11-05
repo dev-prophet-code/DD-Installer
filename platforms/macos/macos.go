@@ -9,6 +9,9 @@ package macos
 import (
 	"context"
 	"errors"
+	"os"
+	"os/exec"
+	"strconv"
 
 	"github.com/dev-prophet-code/dd-installer/internal/model"
 	"github.com/dev-prophet-code/dd-installer/internal/platform"
@@ -36,6 +39,15 @@ func (mac) LocalRunner(model.Config) (transport.Runner, error) {
 
 func (mac) ProvisionLocal(context.Context, func(string)) (bool, error) {
 	return false, errors.New("local installation is not supported on macOS")
+}
+
+// PreventSleep runs the system tool caffeinate for as long as this process lives.
+func (mac) PreventSleep() func() {
+	cmd := exec.Command("caffeinate", "-dims", "-w", strconv.Itoa(os.Getpid()))
+	if err := cmd.Start(); err != nil {
+		return func() {}
+	}
+	return func() { _ = cmd.Process.Kill(); _ = cmd.Wait() }
 }
 
 func (mac) DefaultSSHKeys() []string { return platforms.SSHKeyCandidates() }

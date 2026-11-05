@@ -142,6 +142,11 @@ func (z *wizard) updateSummary() {
 }
 
 func (z *wizard) onInstall() {
+	// the notice about the unencrypted web console must be acknowledged first
+	z.confirmConsoleExposure(z.request().Cfg(), z.startInstall)
+}
+
+func (z *wizard) startInstall() {
 	p := &z.ins
 	z.setErr("")
 	p.progress.Objects = nil

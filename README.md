@@ -8,7 +8,7 @@ Native desktop installer for **[Dune: Awakening Docker](https://github.com/Red-B
 
 One real application per operating system - **Windows, macOS, Linux** - with a native window (no web interface, no browser). It installs the server either on **this computer** or on a **remote Linux server over SSH**, creates your Sietches and Deep Desert layout, and tunes the setup to the machine.
 
-> **Status: alpha (`0.0.4-alpha`).** The core logic is implemented and unit-tested. It has **not yet been tested end to end** on real servers or on real Windows/macOS machines. Expect rough edges. See the [roadmap](docs/ROADMAP.md) and the [changelog](CHANGELOG.md).
+> **Status: alpha (`0.0.5-alpha`).** The core logic is implemented and unit-tested, and it has already been tested on real servers and on desktop systems. **Problems can still occur**, so expect rough edges and make backups. See the [roadmap](docs/ROADMAP.md) and the [changelog](CHANGELOG.md).
 
 > **Disclaimer.** Unofficial community tool, not affiliated with Funcom or RedBlink. DD-Installer **does not store your credentials** (SSH password, key passphrase and Funcom token stay in memory for the session only). **Neither RedBlink (author of Dune: Awakening Docker) nor Prophet (author of DD-Installer) can be held liable** for any damage. Full text: [docs/DISCLAIMER.md](docs/DISCLAIMER.md). The app asks you to accept it before installing.
 
@@ -35,6 +35,7 @@ One real application per operating system - **Windows, macOS, Linux** - with a n
 </p>
 <p align="center">
   <img src="docs/images/07-wsl.png" alt="Windows: the installer offers to install WSL2 and Ubuntu if they are missing" width="49%">
+  <img src="docs/images/08-console-warning.png" alt="Notice before installing: the web console is not encrypted and must be acknowledged" width="49%">
 </p>
 
 *The screenshots show the wizard with example data (no real server). The sand, glow and sandstorm effects are animated in the real application and can be switched off.*
@@ -59,7 +60,7 @@ Verify the download with `SHA256SUMS`. The programs are **not code-signed yet**,
 | **Two targets** | *This computer*: Linux natively, Windows via WSL2. *Remote server*: SSH with key, password or ssh-agent and a confirmed host-key fingerprint. macOS can only use the remote target. |
 | **WSL2 on Windows** | Checks for WSL2 and Ubuntu. If missing, it offers to install them (administrator prompt), prepares a user, enables systemd and continues the setup. A Windows restart may be required. |
 | **Safe, resumable install** | The long steps run **on the server**; a dropped connection or a closed window does not stop them. Press Install again to continue where it stopped. Your computer is kept awake meanwhile. |
-| **Tested version** | Installs the Dune Docker release DD-Installer was tested with (pinned), newest upstream on request. |
+| **Tested version** | Installs the Dune Docker release DD-Installer was tested with, newest upstream on request. Every download is checked against a SHA-256 before anything is run (the current checksum list is read before each download). |
 | **Sietches** | Choose how many Hagga Basin Sietches to create, name each one and set it to PvE or PvP (per-Sietch ruleset is *experimental*). |
 | **Deep Desert** | 1-3 instances. Upstream rules apply: the first instance keeps its existing ruleset, the second gets the opposite, only the third is selectable. |
 | **System scan and tuning** | Probes CPU (AVX2), RAM, swap, disk, Docker, sudo, ports and WSL; blocks impossible setups; recommends a layout and tuning (PostgreSQL, RabbitMQ, swap, `.wslconfig`). |
@@ -100,7 +101,7 @@ More: [Architecture](docs/ARCHITECTURE.md), [Feasibility study](docs/FEASIBILITY
 
 Requires Go 1.26+ and a C compiler because the native GUI uses CGO:
 
-* Linux: `sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev`
+* Linux: `sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev`
 * macOS: Xcode command line tools
 * Windows: MinGW-w64 (`gcc` on PATH)
 
@@ -114,7 +115,7 @@ go run ./cmd/dd-installer   # opens the installer window
 
 ## Releases and versions
 
-The version number lives in the [`VERSION`](VERSION) file. Every push to `main` builds all three operating systems and publishes or updates the release `v<VERSION>` (versions with `-alpha`/`-beta` are pre-releases); its notes come from [CHANGELOG.md](CHANGELOG.md), and the files carry a build provenance attestation. To publish a new version, change `VERSION`, add a changelog section and push. If the macOS runner was unavailable, run the **Release macOS** workflow to add the macOS build. To update the tested Dune Docker version run `scripts/update-upstream-pin.sh`.
+The version number lives in the [`VERSION`](VERSION) file. Every push to `main` builds all three operating systems and publishes or updates the release `v<VERSION>` (versions with `-alpha`/`-beta` are pre-releases); its notes come from [CHANGELOG.md](CHANGELOG.md), and the files carry a build provenance attestation. To publish a new version, change `VERSION`, add a changelog section and push. If the macOS runner was unavailable, run the **Release macOS** workflow to add the macOS build. The checksum list `upstream/upstream.json` is refreshed daily by the **Upstream manifest** workflow (newest Dune Docker release); the *tested* release is only changed by hand: `go run ./cmd/pin-upstream -tag vX.Y.Z -tested`.
 
 ## Repository layout
 

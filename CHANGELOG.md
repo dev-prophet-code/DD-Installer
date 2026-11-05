@@ -2,6 +2,25 @@
 
 Versions follow the number in the [`VERSION`](VERSION) file. Newest first.
 
+## 0.0.5-alpha
+
+Security release: findings of an internal code review and penetration test are fixed.
+
+**Security**
+* **Verified downloads.** Before every download DD-Installer reads the current checksum list (`upstream/upstream.json`, refreshed daily by a workflow; the tested release is only changed by hand) and checks the SHA-256 of all downloaded files **before** anything is run or moved into place. No checksum, a mismatch or an archive containing links stops the installation. The built-in pin is the offline fallback. "Newest upstream" uses the same verified path; upstream's `bootstrap.sh` is no longer piped into a shell.
+* **Temporary sudo access** is now removed **immediately** after a final check of the installation (files, web console, battlegroup, Docker access), and the removal is verified. A systemd unit also removes it at the next boot, because the 3-hour timer alone did not survive a reboot. The user name is validated and quoted before it goes into the sudoers file.
+* **SSH host keys:** keys marked `@revoked` in `~/.ssh/known_hosts` are always refused and cannot be confirmed. A wrong password on a trusted host is reported as a login error instead of a host-key question.
+* **Input validation:** the strict user and host checks of the input fields now apply to every value, including those imported from `~/.ssh/config`.
+* **Console traffic:** the helper on the server never sends the admin password or the Funcom token through an HTTP proxy from the environment (it checks for proxy settings and connects directly).
+* **Admin password on the server:** the folder with the install log is private and is deleted as soon as the step has finished.
+* **Uninstall guard:** the folder is resolved first (symlinks, `..`, `//`); the home directory and every folder that contains it are always refused.
+* **New notice before installing** about the unencrypted web console (plain HTTP). It adapts to your settings and must be acknowledged.
+
+**Other**
+* Builds use Go 1.26 (required by updated dependencies); Linux builds need the Wayland development packages.
+* New tests for every fix above (real shell, real SSH server, GUI flow).
+* README and release notes now say that the alpha was tested on real servers and desktop systems and that problems can still occur.
+
 ## 0.0.4-alpha
 
 **Reliability**

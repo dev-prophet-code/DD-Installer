@@ -13,6 +13,7 @@ import (
 	"github.com/dev-prophet-code/dd-installer/internal/app"
 	"github.com/dev-prophet-code/dd-installer/internal/assistant"
 	"github.com/dev-prophet-code/dd-installer/internal/install"
+	"github.com/dev-prophet-code/dd-installer/internal/model"
 	"github.com/dev-prophet-code/dd-installer/internal/platform"
 	"github.com/dev-prophet-code/dd-installer/internal/probe"
 	"github.com/dev-prophet-code/dd-installer/internal/sizing"
@@ -129,4 +130,20 @@ func TestShots(t *testing.T) {
 	f, _ := os.Create(dir + "/07-wsl.png")
 	defer f.Close()
 	_ = png.Encode(f, c2.Capture())
+
+	// 8 notice shown before the installation starts (console open to everybody)
+	z3 := newTest(t, &fakePF{id: "windows", name: "Windows", ls: platform.LocalSupport{Supported: true}})
+	z3.show(pgInstall)
+	warn := model.Default()
+	warn.Target = model.TargetSSH
+	warn.SSH = model.SSHConfig{Host: "203.0.113.10", Port: 22, User: "dune", Auth: model.AuthKey}
+	warn.ConfigureFirewall = true
+	z3.confirmConsoleExposure(warn, func() {})
+	z3.w.Resize(size)
+	c3 := z3.w.Canvas().(test.WindowlessCanvas)
+	c3.Resize(fyne.NewSize(1021, 821))
+	c3.Resize(size)
+	f3, _ := os.Create(dir + "/08-console-warning.png")
+	defer f3.Close()
+	_ = png.Encode(f3, c3.Capture())
 }

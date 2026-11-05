@@ -11,6 +11,6 @@ cat <<NOTES
 $SECTION
 
 ---
-**Early alpha.** The programs are not code-signed (Windows SmartScreen and macOS Gatekeeper will warn) and have not been tested on every real Windows/macOS machine yet. Read the disclaimer in the archive: no credentials are stored and neither RedBlink nor Prophet can be held liable.
+**Alpha.** Tested on real servers and desktop systems, but problems can still occur: make backups. The programs are not code-signed (Windows SmartScreen and macOS Gatekeeper will warn). Read the disclaimer in the archive: no credentials are stored and neither RedBlink nor Prophet can be held liable.
 Verify downloads with \`SHA256SUMS\` (and the build provenance attestation of this repository). Built from commit ${GITHUB_SHA:-unknown}.
 NOTES

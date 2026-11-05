@@ -34,7 +34,7 @@ The UI only talks to `internal/app.Controller`. OS-specific code lives in `platf
 | Task | How |
 |---|---|
 | Add an assistant rule | `internal/assistant/rules.go` (+ case in `assistant_test.go`) |
-| Update the tested upstream version | `scripts/update-upstream-pin.sh [tag]`, run tests, commit |
+| Update the tested upstream version | `go run ./cmd/pin-upstream -tag vX.Y.Z -tested` (writes `upstream/upstream.json` and the built-in pin), run tests, commit |
 | Regenerate README screenshots | `DD_SHOTS=$PWD/docs/images go test ./internal/ui -run TestShots` |
 | Release a new version | change `VERSION`, add a section to `CHANGELOG.md`, push to `main` |
 

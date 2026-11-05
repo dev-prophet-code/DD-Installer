@@ -21,7 +21,7 @@ platforms/{linux,macos,windows}   OS-specific implementations
 
 1. **connect** (local runner / WSL2 / SSH with confirmed host key)
 2. **scan** - one read-only POSIX script, parsed into `probe.Info`; `sizing.Analyse` produces blocking errors, warnings and tuning
-3. **bootstrap** - upstream `bootstrap.sh` with `DUNE_BOOTSTRAP_SKIP_INSTALL=1` (existing complete installs are reused, never overwritten)
+3. **bootstrap** - download of the chosen release (tested by default, newest on request), SHA-256 check of all files against `upstream/upstream.json`, then move into place (existing complete installs are reused, never overwritten)
 4. **install** - upstream `install.sh` with `ADMIN_BIND_PORT`
 5. **tuning** - validated `.env` overrides from the sizing report
 6. **console-setup** - on the target, an embedded Python (stdlib) helper talks to `http://127.0.0.1:<port>`: login with the generated admin password, write server title/region, save the Funcom token, run the deployment task
@@ -50,7 +50,8 @@ Running the Console API calls on the target means no extra firewall port has to 
 * **Detached steps.** The install step (Docker, web console) is started on the target with `setsid nohup`, writes to `~/.dd-installer/<step>/log` and records its exit code. DD-Installer polls the log with short SSH calls (offset based, state read before size so no line is lost). If a poll fails because the connection broke, the runner reconnects with back-off and keeps reading. Cancelling kills the remote process group. The scripts contain no secrets.
 * **Idempotent steps and resume.** Every step may have a *check* script that exits 0 when the step is already done (release files present, console healthy, setup complete, battlegroup ready). `Run` skips such steps, so pressing Install again after any failure continues from where it stopped. The console helper re-attaches to a running `init` task instead of starting a second one. Marker lines (`DD_PORT`, `DD_UPSTREAM_VERSION`) carry facts such as the real console port back to later steps.
 * **Connection loss** during non-detached steps (console API calls run on the target) is detected (`transport.IsConnectionLost`) and the step is repeated after reconnecting; this is safe because the steps are idempotent.
-* **Pinned upstream.** `internal/install/upstream.go` holds the tested tag (and optional SHA-256). The pinned downloader repeats the safety checks of upstream's `bootstrap.sh`. A version mismatch is logged as a warning.
+* **Verified upstream.** Before each download `install.ResolvePin` reads `upstream/upstream.json` (tested and newest release with the SHA-256 of all files, see `TreeHash`); `internal/install/upstream.go` holds the same tested pin as the offline fallback. The downloader repeats the safety checks of upstream's `bootstrap.sh`, hashes the extracted files and installs nothing on a mismatch, a missing checksum or an archive with links. `cmd/pin-upstream` and the *Upstream manifest* workflow maintain the list. A version mismatch is logged as a warning.
+* **Finalize and lock.** The last step (`finalize`) checks files, console, battlegroup and Docker access; right after it the temporary sudo grant is removed and the removal is verified (`Options.lockSudo`).
 * **Sleep.** `Platform.PreventSleep` (SetThreadExecutionState / caffeinate / systemd-inhibit) while a run or action is active.
 
 ## SSH

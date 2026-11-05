@@ -11,7 +11,7 @@ concurrency:
 permissions:
   contents: read
 env:
-  GO_VERSION: '1.24'
+  GO_VERSION: '1.26'
 jobs:
   test:
     strategy:
@@ -27,7 +27,7 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
       - name: Linux GUI build dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev
+        run: sudo apt-get update && sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
       - run: go vet ./...
       - run: go test ./...
       - name: Race detector (everything except the GUI toolkit tests)
@@ -43,7 +43,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ env.GO_VERSION }}
-      - run: sudo apt-get update && sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev
+      - run: sudo apt-get update && sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         continue-on-error: true   # advisory until the first clean run; see the job summary
         with:
@@ -57,7 +57,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ env.GO_VERSION }}
-      - run: sudo apt-get update && sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev
+      - run: sudo apt-get update && sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
       - name: Known vulnerabilities in dependencies and standard library
         continue-on-error: true   # report, do not block, until reviewed
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
@@ -70,7 +70,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ env.GO_VERSION }}
-      - run: sudo apt-get update && sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev
+      - run: sudo apt-get update && sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
       - name: Render the documentation screenshots
         run: mkdir -p out && DD_SHOTS="$PWD/out" go test ./internal/ui -run TestShots
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

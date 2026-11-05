@@ -98,7 +98,7 @@ More: [Architecture](docs/ARCHITECTURE.md), [Feasibility study](docs/FEASIBILITY
 
 ## Build from source
 
-Requires Go 1.24+ and a C compiler because the native GUI uses CGO:
+Requires Go 1.26+ and a C compiler because the native GUI uses CGO:
 
 * Linux: `sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev`
 * macOS: Xcode command line tools

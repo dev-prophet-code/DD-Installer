@@ -4,7 +4,7 @@ Thanks for helping! This is an early alpha; small, focused changes are easiest t
 
 ## Setup
 
-* Go 1.24+ and a C compiler (the native GUI uses CGO): Linux `sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev`, macOS Xcode command line tools, Windows MinGW-w64.
+* Go 1.26+ and a C compiler (the native GUI uses CGO): Linux `sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev`, macOS Xcode command line tools, Windows MinGW-w64.
 * `go test ./...` must pass. `go vet ./...` and `gofmt -l .` must be clean.
 * UI tests run headless (Fyne test driver). To look at the real window on Linux without a display use `xvfb-run`.
 

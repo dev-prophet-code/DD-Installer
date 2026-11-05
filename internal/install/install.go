@@ -134,6 +134,15 @@ func buildSteps(o *Options) []step {
 			Script: func(s *state) string {
 				return consoleScript(cfg, "layout", setupParams(s, map[string]any{"sietches": cfg.Sietches, "deepDesert": cfg.DeepDesert, "combat": o.ExperimentalCombat}))
 			}},
+		{ID: "verify", Title: "Verify the resulting layout", Optional: true,
+			Script: func(*state) string { return verifyScript(cfg) }},
+		{ID: "firewall", Title: "Open game ports in the server firewall", Optional: true,
+			Script: func(s *state) string {
+				if !cfg.ConfigureFirewall || cfg.Target != model.TargetSSH {
+					return "" // a local/WSL install has no server firewall to configure
+				}
+				return firewallScript(cfg, s.port)
+			}},
 		{ID: "post", Title: "Final tuning commands", Optional: true,
 			Script: func(*state) string {
 				if !cfg.ApplyTuning {

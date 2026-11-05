@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -406,5 +409,128 @@ func TestScriptsQuoteSafely(t *testing.T) {
 	s := tuningScript(cfg, map[string]string{"GOOD": "a b", "bad key": "x", "EVIL": "$(id)"})
 	if strings.Contains(s, "$(id)") || strings.Contains(s, "bad key") {
 		t.Fatal("unsafe env entry written")
+	}
+}
+
+func TestFirewallScriptNeverDisablesOrResets(t *testing.T) {
+	cfg := model.Default()
+	cfg.Target = model.TargetSSH
+	cfg.SSH.Port = 2222
+	cfg.ConsoleAllowFrom = "203.0.113.7"
+	s := firewallScript(cfg, 8088)
+	for _, bad := range []string{"ufw enable", "ufw disable", "ufw reset", "ufw --force", "iptables -F", "firewall-cmd --remove", "--set-default-zone"} {
+		if strings.Contains(s, bad) {
+			t.Errorf("firewall script must not contain %q", bad)
+		}
+	}
+	if !strings.Contains(s, "SSHP=2222") || !strings.Contains(s, "FROM='203.0.113.7'") {
+		t.Fatal("ssh port or restriction missing")
+	}
+	// the SSH rule must come before the game rules so a mistake cannot lock the user out
+	if strings.Index(s, `allow "$SSHP/tcp"`) > strings.Index(s, `allow "$UDPG/udp"`) {
+		t.Fatal("SSH must be allowed first")
+	}
+}
+
+func TestFirewallStepOnlyForSSHTargets(t *testing.T) {
+	var evs []Event
+	r := &fakeRunner{respond: func(k string, n int) (string, int) { return okAll(k, n) }}
+	o := baseOpts(r, &evs)
+	o.Cfg.ConfigureFirewall = true // local target: no server firewall to touch
+	if err := Run(context.Background(), o); err != nil {
+		t.Fatal(err)
+	}
+	if stepStatus(evs, "firewall") != "skipped" {
+		t.Fatalf("firewall step must be skipped for a local install, got %q", stepStatus(evs, "firewall"))
+	}
+}
+
+// Every generated script must at least be valid POSIX shell.
+func TestGeneratedScriptsAreValidShell(t *testing.T) {
+	cfg := model.Default()
+	cfg.Target = model.TargetSSH
+	cfg.SSH.Port = 22
+	cfg.ConsoleAllowFrom = "203.0.113.0/24"
+	cfg.InstallDir = "~/my dune"
+	scripts := map[string]string{
+		"bootstrap-latest": bootstrapScript(cfg, false),
+		"bootstrap-pinned": pinnedBootstrapScript(cfg),
+		"install":          installScript(cfg, 8088),
+		"check-bootstrap":  checkBootstrapScript(cfg),
+		"check-install":    checkInstallScript(cfg, 8088),
+		"tuning":           tuningScript(cfg, map[string]string{"DUNE_PG_JIT": "off"}),
+		"console":          consoleScript(cfg, "setup", `{"port":8088}`),
+		"ready":            readyScript(cfg, 1),
+		"post":             postScript(cfg, []string{"runtime/scripts/dune memory-swap enable"}),
+		"firewall":         firewallScript(cfg, 8088),
+		"verify":           verifyScript(cfg),
+		"detach-start":     detachStartScript("install", "echo hi\n"),
+		"detach-poll":      detachPollScript("install", 10),
+		"detach-kill":      detachKillScript("install"),
+		"sudo-grant":       withPrelude(expand("@sudo-temp-grant", "dune")),
+	}
+	for name, s := range scripts {
+		cmd := exec.Command("sh", "-n")
+		cmd.Stdin = strings.NewReader(s)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Errorf("%s: invalid shell: %v\n%s", name, err, out)
+		}
+	}
+}
+
+// The detach/poll mechanics against a real shell (no simulation).
+func TestRunDetachedWithRealShell(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	var evs []Event
+	o := &Options{Runner: &transport.Local{Cmd: transport.ShellArgs}, Emit: func(e Event) { evs = append(evs, e) },
+		Sleep: func(time.Duration) { time.Sleep(120 * time.Millisecond) }}
+	red := newRedactor()
+
+	code, out, err := runDetached(context.Background(), o, red, "install", "echo first\nsleep 1\necho second\nexit 3\n")
+	if err != nil || code != 3 {
+		t.Fatalf("code=%d err=%v", code, err)
+	}
+	if !strings.Contains(out, "first") || !strings.Contains(out, "second") {
+		t.Fatalf("output incomplete: %q", out)
+	}
+	var lines []string
+	for _, e := range evs {
+		if e.Type == "log" {
+			lines = append(lines, e.Msg)
+		}
+	}
+	if strings.Join(lines, "|") != "first|second" {
+		t.Fatalf("log lines must arrive once and in order, got %v", lines)
+	}
+
+	// a second run with an old finished job must start fresh, not replay it
+	evs = nil
+	code, out, err = runDetached(context.Background(), o, red, "install", "echo again\n")
+	if err != nil || code != 0 || strings.Contains(out, "first") || !strings.Contains(out, "again") {
+		t.Fatalf("fresh run: code=%d err=%v out=%q", code, err, out)
+	}
+}
+
+func TestRunDetachedCancelKillsTheJob(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	o := &Options{Runner: &transport.Local{Cmd: transport.ShellArgs}, Emit: func(Event) {},
+		Sleep: func(time.Duration) { time.Sleep(100 * time.Millisecond) }}
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() { time.Sleep(700 * time.Millisecond); cancel() }()
+	_, _, err := runDetached(ctx, o, newRedactor(), "install", "echo $$ > \"$HOME/job.pid\"\nsleep 30\n")
+	if err == nil {
+		t.Fatal("cancel must return an error")
+	}
+	b, _ := os.ReadFile(filepath.Join(home, "job.pid"))
+	pid := strings.TrimSpace(string(b))
+	time.Sleep(300 * time.Millisecond)
+	if pid != "" {
+		// a killed process may linger as a zombie until its parent/init reaps it; that is "dead"
+		stat, _ := exec.Command("ps", "-o", "stat=", "-p", pid).Output()
+		if st := strings.TrimSpace(string(stat)); st != "" && !strings.HasPrefix(st, "Z") {
+			t.Fatalf("the background job (pid %s, state %s) is still running after cancel", pid, st)
+		}
 	}
 }

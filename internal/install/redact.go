@@ -48,32 +48,57 @@ func (r *redactor) line(s string) string {
 	return r.apply(s)
 }
 
-// lineWriter splits a byte stream into lines.
+// lineWriter splits a byte stream into lines. It splits at "\n" and also at a
+// lone "\r", because progress displays (SteamCMD, docker pull) redraw one line
+// with carriage returns; each redraw becomes its own line.
 type lineWriter struct {
-	buf []byte
-	fn  func(string)
+	buf  []byte
+	scan int // bytes of buf already searched for a newline
+	fn   func(string)
 }
+
+const maxLine = 64 * 1024
 
 func (w *lineWriter) Write(p []byte) (int, error) {
 	w.buf = append(w.buf, p...)
 	for {
-		i := bytes.IndexByte(w.buf, '\n')
+		i := bytes.IndexByte(w.buf[w.scan:], '\n')
 		if i < 0 {
-			if len(w.buf) > 64*1024 { // runaway line without newline
-				w.fn(string(w.buf))
-				w.buf = nil
+			w.scan = len(w.buf)       // only new bytes are searched next time (no quadratic rescans)
+			if len(w.buf) > maxLine { // runaway line without a newline
+				// cut at the last complete redraw if there is one, so no piece is split in two
+				cut := bytes.LastIndexByte(w.buf, '\r') + 1
+				if cut == 0 {
+					cut = len(w.buf)
+				}
+				w.emit(w.buf[:cut])
+				w.buf, w.scan = append([]byte(nil), w.buf[cut:]...), 0
 			}
 			break
 		}
-		w.fn(strings.TrimRight(string(w.buf[:i]), "\r"))
-		w.buf = w.buf[i+1:]
+		i += w.scan
+		w.emit(w.buf[:i])
+		w.buf, w.scan = w.buf[i+1:], 0
 	}
 	return len(p), nil
 }
 
+// emit sends one physical line, split at carriage returns.
+func (w *lineWriter) emit(b []byte) {
+	if len(b) == 0 {
+		w.fn("") // an empty line stays an empty line
+		return
+	}
+	for _, seg := range bytes.Split(b, []byte{'\r'}) {
+		if len(seg) > 0 {
+			w.fn(string(seg))
+		}
+	}
+}
+
 func (w *lineWriter) Flush() {
 	if len(w.buf) > 0 {
-		w.fn(strings.TrimRight(string(w.buf), "\r"))
-		w.buf = nil
+		w.emit(w.buf)
+		w.buf, w.scan = nil, 0
 	}
 }

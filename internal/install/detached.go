@@ -79,7 +79,10 @@ func parsePoll(out string) (state, body string, ok bool) {
 			state = strings.TrimSpace(strings.TrimPrefix(l, "DD_STATE "))
 		}
 	}
-	return state, out[i+len("DD_BODY\n"):], state != ""
+	if state == "" {
+		return "", "", false
+	}
+	return state, out[i+len("DD_BODY\n"):], true
 }
 
 // reconnect replaces the runner with a fresh connection, retrying with

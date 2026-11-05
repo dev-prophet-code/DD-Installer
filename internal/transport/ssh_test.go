@@ -284,3 +284,18 @@ func TestRunHonoursContextCancel(t *testing.T) {
 }
 
 func pemBytes(b *pem.Block) []byte { return pem.EncodeToMemory(b) }
+
+func FuzzParseJump(f *testing.F) {
+	f.Add("bob@host:22", "me")
+	f.Add("a@b,c@d", "")
+	f.Add("[::1]:99999", "x")
+	f.Fuzz(func(t *testing.T, j, def string) {
+		u, h, p, err := ParseJump(j, def)
+		if err != nil {
+			return
+		}
+		if u == "" || h == "" || p < 1 || p > 65535 {
+			t.Fatalf("accepted an incomplete jump: %q %q %d", u, h, p)
+		}
+	})
+}

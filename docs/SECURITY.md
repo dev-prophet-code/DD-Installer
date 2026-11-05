@@ -36,3 +36,15 @@ The only credential the installer can write to disk, and only on an explicit cli
 ## WSL2 provisioning (Windows)
 
 The user created in a fresh Ubuntu gets passwordless sudo (the installer runs unattended inside a dedicated distribution). Elevation uses the standard Windows UAC prompt; the installer itself never runs elevated. The consent dialog states what will be installed.
+
+## Reliability and destructive actions (0.0.4)
+
+* **Detached scripts** live in `~/.dd-installer/<step>/` (mode 0700) on the target and contain no secrets; the token and passwords still travel only through the SSH channel in a 0600 temp directory that is removed on exit.
+* **known_hosts and jump hosts:** a conflicting `known_hosts` entry is always an error and wins over a session pin; a jump host must already be trusted in `known_hosts`.
+* **Firewall helper:** only adds allow rules to an *active* ufw/firewalld; SSH is allowed first; it never enables, disables or resets anything (tested). The web console can be restricted to an IP/CIDR.
+* **Management actions:** destructive actions need an exact typed phrase; "remove everything" has hard guard rails (marker files, never `/`, home or system folders) and is tested against real temporary directories.
+* **Temporary sudo** is revoked at the end of the run and by a 3-hour timer (systemd-run or a background sleep) in case DD-Installer dies.
+* **Supply chain:** the Dune Docker release is pinned to the tested tag (SHA-256 check when a hash is configured); GitHub Actions are pinned to commit SHAs and updated by Dependabot; releases carry a build provenance attestation and `SHA256SUMS`; CI runs govulncheck and the race detector.
+* **Fuzzing:** parsers of untrusted text (scan output, tokens, ssh config, poll results, jump hosts, progress lines, validators) have fuzz tests; fuzzing already found and fixed a quadratic line splitter, a polling race and an ssh-config `Match` bug.
+
+Report vulnerabilities as described in the root [SECURITY.md](../SECURITY.md).

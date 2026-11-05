@@ -29,4 +29,6 @@ The assistant **never** runs destructive actions (no `rm -rf`, volume/prune, dis
 | wsl-systemd | systemd off in WSL2 | write `/etc/wsl.conf` (asks first) |
 | no-space, avx, root-install, funcom-token, docker-desktop-internal, ssh-* | cannot be fixed automatically | explanation + exact steps |
 
+The installer follows the assistant's result: after a failed step the wizard says "Press Install again to continue" - finished steps are detected and skipped, so a fix never repeats work.
+
 Add a rule in `internal/assistant/rules.go` with a regex, an explanation, a risk level and actions; add a case to `assistant_test.go`.

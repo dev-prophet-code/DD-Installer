@@ -2,6 +2,33 @@
 
 Versions follow the number in the [`VERSION`](VERSION) file. Newest first.
 
+## 0.0.4-alpha
+
+**Reliability**
+* The long install step (Docker, web console) now runs **detached on the server** and is only followed by DD-Installer. A dropped SSH connection, a sleeping laptop or a closed window no longer stops it; the app reconnects (with back-off) and continues reading the log. Cancel really stops the job on the server.
+* **Resume:** pressing Install again continues where it stopped - finished steps (download, console, deployment, start, readiness) are detected on the server and skipped; a running deployment is re-attached instead of started twice.
+* **Pinned upstream:** Dune Docker `v1.4.61` (the tested version) is installed by default, with optional SHA-256 verification; "newest upstream" is an option. A version mismatch is reported. `scripts/update-upstream-pin.sh` updates the pin.
+* The computer is **kept awake** while installing (Windows, macOS, Linux).
+* The temporary sudo grant also **removes itself after 3 hours**.
+* Funcom **token check** with paste button and live feedback.
+
+**New features**
+* **Welcome page** (what you need / what will happen) and **Finish page** (console link, admin password with reveal/copy, port checklist, health check, "Start over" clears secrets).
+* **Manage existing servers:** status, backup, repair permissions, update checks, game and console updates, restart, stop, and "remove everything" (typed confirmation, guard rails). Also the **Hyper-V Director travel fix** for Funcom's official Hyper-V server (pinned commit).
+* **Firewall helper:** opens the game ports in an active ufw/firewalld (only adds rules, SSH first, never enables/resets), optional restriction of the web console to your IP.
+* **Verification step** prints Sietches, Deep Desert layout and ports after setup.
+* **SSH:** `~/.ssh/config` import (Host, User, Port, IdentityFile, ProxyJump), single **jump host**, trusted keys from `~/.ssh/known_hosts` (conflicts are errors), servers that only offer keyboard-interactive passwords, **Windows OpenSSH agent**.
+* **UI:** inline field validation, overall and download progress bars, monospace log with filter and follow, **effects on/off** switch (saved; `DD_INSTALLER_NO_EFFECTS=1`), animated demo in the README.
+
+**Quality**
+* New tests: controller, in-process SSH server, real-shell tests of the detached runner, firewall/uninstall guard rails; fuzz tests for all parsers. Fuzzing found and fixed: quadratic line splitting on progress output, a race in detached polling, a UI freeze on heavy log output, `Match` blocks in ssh config.
+* `ui.go` split into one file per page; the disclaimer has one source (`internal/app/disclaimer.md`).
+
+**Build and project**
+* Release workflow: Apple-Silicon runner `macos-14`, create-or-update instead of delete/recreate, release notes from this file, build provenance attestation, separate **Release macOS** workflow to add a missing macOS build.
+* CI: race detector, govulncheck and golangci-lint (advisory at first), screenshot artifact; actions pinned to commit SHAs; Dependabot.
+* New docs: FAQ, router & firewall guide, hosting provider notes, troubleshooting. Security policy, contributing guide, issue and PR templates.
+
 ## 0.0.3-alpha
 
 * New Dune: Awakening inspired look and feel: Arrakis-night theme, embedded fonts (Rajdhani, Cinzel Decorative), generated desert backdrop with moons and dunes, drifting sand, glow and shimmer effects, page transitions, sandstorm during installation. Identical on Windows, macOS and Linux.

@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "updated": "2026-11-11",
+  "updated": "2026-11-12",
   "tested": {
     "tag": "v1.4.61",
     "tree_sha256": "c5410cff1f2df667d0fdd1af321c9f6d1a1b429d8221af236de054e594a52811"
   },
   "latest": {
-    "tag": "v1.4.63",
-    "tree_sha256": "3927580d6eba55c16624b15f6429e0321980ec4f5822b28bca6396251e0978be"
+    "tag": "v1.4.64",
+    "tree_sha256": "1fd53767f1a76aa1c3ad4e5944abf0fff60afa3fab17abc55d375abd15e16613"
   }
 }
